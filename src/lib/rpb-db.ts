@@ -213,6 +213,80 @@ export const saveSummaryHistory = async (
   };
 };
 
+export const updateSummaryHistory = async (
+  supabase: SupabaseClient,
+  id: string,
+  payload: {
+    title: string;
+    customerName: string;
+    projectName: string;
+    snapshot: RpbDraftSnapshot;
+  },
+): Promise<SavedSummaryRecord | null> => {
+  const { data, error } = await supabase
+    .from("rpb_saved_summaries")
+    .update({
+      title: payload.title,
+      customer_name: payload.customerName,
+      project_name: payload.projectName,
+      snapshot_json: payload.snapshot,
+    })
+    .eq("id", id)
+    .select("id, user_id, title, customer_name, project_name, snapshot_json, created_at, updated_at")
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    id: String(data.id),
+    userId: String(data.user_id ?? ""),
+    createdByEmail: "",
+    title: String(data.title ?? "Untitled"),
+    customerName: String(data.customer_name ?? ""),
+    projectName: String(data.project_name ?? ""),
+    snapshot: data.snapshot_json as RpbDraftSnapshot,
+    createdAt: String(data.created_at ?? ""),
+    updatedAt: String(data.updated_at ?? ""),
+  };
+};
+
+export const fetchSummaryHistoryById = async (
+  supabase: SupabaseClient,
+  id: string,
+): Promise<SavedSummaryRecord | null> => {
+  const { data, error } = await supabase
+    .from("rpb_saved_summaries")
+    .select("id, user_id, title, customer_name, project_name, snapshot_json, created_at, updated_at")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    id: String(data.id),
+    userId: String(data.user_id ?? ""),
+    createdByEmail: "",
+    title: String(data.title ?? "Untitled"),
+    customerName: String(data.customer_name ?? ""),
+    projectName: String(data.project_name ?? ""),
+    snapshot: data.snapshot_json as RpbDraftSnapshot,
+    createdAt: String(data.created_at ?? ""),
+    updatedAt: String(data.updated_at ?? ""),
+  };
+};
+
 export const fetchSummaryHistory = async (
   supabase: SupabaseClient,
   options?: {

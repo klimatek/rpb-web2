@@ -5,9 +5,53 @@ import type {
   CustomOtherItem,
   DimensionKey,
   PanelThickness,
+  QuotationContent,
   RpbDraftSnapshot,
 } from "@/types/rpb";
+import { DEFAULT_ADDITIONAL_INFORMATION } from "@/lib/quotation-content";
 import { create } from "zustand";
+
+export type QuotationContentKey = keyof QuotationContent;
+
+const DEFAULT_QUOTATION_CONTENT: QuotationContent = {
+  attn: "",
+  discount: "25%",
+  additionalDiscount: "",
+  additionalInformation: DEFAULT_ADDITIONAL_INFORMATION,
+  preparedForOverride: "",
+  customerAddressOverride: "",
+  contactPersonOverride: "",
+  phoneNumberOverride: "",
+  salesNameOverride: "",
+  salesEmailOverride: "",
+};
+
+const sanitizeQuotationContent = (
+  value?: Partial<QuotationContent> | null,
+): QuotationContent => ({
+  attn: typeof value?.attn === "string" ? value.attn : DEFAULT_QUOTATION_CONTENT.attn,
+  discount: typeof value?.discount === "string" ? value.discount : DEFAULT_QUOTATION_CONTENT.discount,
+  additionalDiscount:
+    typeof value?.additionalDiscount === "string"
+      ? value.additionalDiscount
+      : DEFAULT_QUOTATION_CONTENT.additionalDiscount,
+  additionalInformation:
+    typeof value?.additionalInformation === "string"
+      ? value.additionalInformation
+      : DEFAULT_QUOTATION_CONTENT.additionalInformation,
+  preparedForOverride:
+    typeof value?.preparedForOverride === "string" ? value.preparedForOverride : "",
+  customerAddressOverride:
+    typeof value?.customerAddressOverride === "string" ? value.customerAddressOverride : "",
+  contactPersonOverride:
+    typeof value?.contactPersonOverride === "string" ? value.contactPersonOverride : "",
+  phoneNumberOverride:
+    typeof value?.phoneNumberOverride === "string" ? value.phoneNumberOverride : "",
+  salesNameOverride:
+    typeof value?.salesNameOverride === "string" ? value.salesNameOverride : "",
+  salesEmailOverride:
+    typeof value?.salesEmailOverride === "string" ? value.salesEmailOverride : "",
+});
 
 const DEFAULT_DIMENSIONS = {
   length: 3550,
@@ -170,7 +214,7 @@ interface RpbStore {
   ahus: AhuDraft[];
   activeAhuId: string;
   adjustments: AdjustmentValues;
-  quotationContent: string;
+  quotationContent: QuotationContent;
   setCustomerName: (value: string) => void;
   setProjectName: (value: string) => void;
   setCustomerAddress: (value: string) => void;
@@ -185,7 +229,8 @@ interface RpbStore {
   removeCustomOtherItem: (itemId: string) => void;
   removeOther: (itemId: string) => void;
   setAdjustment: (key: AdjustmentKey, value: number) => void;
-  setQuotationContent: (value: string) => void;
+  setQuotationContentField: (key: QuotationContentKey, value: string) => void;
+  setQuotationContent: (value: Partial<QuotationContent>) => void;
   resetOtherSelections: () => void;
   addAhu: () => void;
   removeAhu: (ahuId: string) => void;
@@ -208,7 +253,7 @@ export const useRpbStore = create<RpbStore>()((set, get) => ({
   ahus: [initialAhu],
   activeAhuId: initialAhu.id,
   adjustments: { ...DEFAULT_ADJUSTMENTS },
-  quotationContent: "",
+  quotationContent: { ...DEFAULT_QUOTATION_CONTENT },
   setCustomerName: (value) => set({ customerName: value }),
   setProjectName: (value) => set({ projectName: value }),
   setCustomerAddress: (value) => set({ customerAddress: value }),
@@ -318,7 +363,14 @@ export const useRpbStore = create<RpbStore>()((set, get) => ({
         [key]: safePercent(value),
       },
     })),
-  setQuotationContent: (value) => set({ quotationContent: value }),
+  setQuotationContentField: (key, value) =>
+    set((state) => ({
+      quotationContent: { ...state.quotationContent, [key]: value },
+    })),
+  setQuotationContent: (value) =>
+    set((state) => ({
+      quotationContent: sanitizeQuotationContent({ ...state.quotationContent, ...value }),
+    })),
   resetOtherSelections: () =>
     set((state) => ({
       ahus: updateAhuById(state.ahus, state.activeAhuId, (ahu) => ({
@@ -411,6 +463,8 @@ export const useRpbStore = create<RpbStore>()((set, get) => ({
       customerAddress: state.customerAddress,
       ahus: state.ahus.map((ahu, index) => sanitizeAhu(ahu, index)),
       adjustments: { ...state.adjustments },
+      quotationContent: { ...state.quotationContent },
+      schemaVersion: 2,
     };
   },
   loadSnapshot: (snapshot) => {
@@ -432,6 +486,7 @@ export const useRpbStore = create<RpbStore>()((set, get) => ({
         services: safePercent(snapshot.adjustments?.services ?? DEFAULT_ADJUSTMENTS.services),
         profit: safePercent(snapshot.adjustments?.profit ?? DEFAULT_ADJUSTMENTS.profit),
       },
+      quotationContent: sanitizeQuotationContent(snapshot.quotationContent),
     });
   },
   resetDraft: () => {
@@ -444,7 +499,7 @@ export const useRpbStore = create<RpbStore>()((set, get) => ({
       ahus: [nextAhu],
       activeAhuId: nextAhu.id,
       adjustments: { ...DEFAULT_ADJUSTMENTS },
-      quotationContent: "",
+      quotationContent: { ...DEFAULT_QUOTATION_CONTENT },
     });
   },
 }));

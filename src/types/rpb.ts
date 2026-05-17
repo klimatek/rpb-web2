@@ -108,12 +108,27 @@ export interface RpbMasterData {
   formulaVariables: FormulaVariableSetting[];
 }
 
+export interface QuotationContent {
+  attn: string;
+  discount: string;
+  additionalDiscount: string;
+  additionalInformation: string;
+  preparedForOverride: string;
+  customerAddressOverride: string;
+  contactPersonOverride: string;
+  phoneNumberOverride: string;
+  salesNameOverride: string;
+  salesEmailOverride: string;
+}
+
 export interface RpbDraftSnapshot {
   customerName: string;
   projectName: string;
   customerAddress: string;
   ahus: AhuDraft[];
   adjustments: AdjustmentValues;
+  quotationContent?: QuotationContent;
+  schemaVersion?: number;
 }
 
 export interface SavedSummaryRecord {

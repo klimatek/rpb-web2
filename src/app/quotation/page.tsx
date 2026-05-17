@@ -2,20 +2,18 @@
 
 import { RpbPageFrame } from "@/components/layout/rpb-page-frame";
 import { useAuthSession } from "@/hooks/use-auth-session";
-import { DEFAULT_ADDITIONAL_INFORMATION } from "@/lib/quotation-content";
 import { useRpbMasterData } from "@/hooks/use-rpb-master-data";
 import { buildAhuSummaries } from "@/lib/rpb-line-items";
+import { saveSummaryHistory, updateSummaryHistory } from "@/lib/rpb-db";
+import {
+  getActiveDraftId,
+  setActiveDraftId,
+} from "@/lib/rpb-latest-draft";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useRpbStore } from "@/store/rpb-store";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-
-type QuotationForm = {
-  attn: string;
-  discount: string;
-  additionalInformation: string;
-};
 
 const numberFormatter = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
 const currencyFormatter = new Intl.NumberFormat("id-ID", {
@@ -40,6 +38,13 @@ function toDiscount(value: string): number {
   if (n < 0) n = 0;
   if (n > 1) n = 1;
   return n;
+}
+
+function toQuotationMarkupFactor(discountRate: number): number {
+  const safeDiscountRate = Number.isFinite(discountRate) ? discountRate : 0;
+  const denominator = 1 - safeDiscountRate;
+  if (denominator <= 0) return 1;
+  return 1 / denominator;
 }
 
 function renderBoldInline(text: string) {
@@ -72,11 +77,15 @@ export default function QuotationPage() {
   const { data: masterData } = useRpbMasterData();
 
   const customerName = useRpbStore((state) => state.customerName);
+  const projectName = useRpbStore((state) => state.projectName);
   const customerAddress = useRpbStore((state) => state.customerAddress);
   const ahus = useRpbStore((state) => state.ahus);
   const adjustments = useRpbStore((state) => state.adjustments);
   const setAhuQuotationDescription = useRpbStore((state) => state.setAhuQuotationDescription);
   const setAhuQuotationQty = useRpbStore((state) => state.setAhuQuotationQty);
+  const quotationContent = useRpbStore((state) => state.quotationContent);
+  const setQuotationContentField = useRpbStore((state) => state.setQuotationContentField);
+  const getSnapshot = useRpbStore((state) => state.getSnapshot);
 
   const [accountName, setAccountName] = useState("");
   const [accountPhone, setAccountPhone] = useState("");
@@ -84,14 +93,11 @@ export default function QuotationPage() {
   const attnInputRef = useRef<HTMLInputElement>(null);
   const additionalInfoRef = useRef<HTMLTextAreaElement>(null);
   const descriptionRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
-  const [form, setForm] = useState<QuotationForm>({
-    attn: "",
-    discount: "25%",
-    additionalInformation: DEFAULT_ADDITIONAL_INFORMATION,
-  });
 
   const [busy, setBusy] = useState(false);
+  const [saveBusy, setSaveBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
   const a4ShellRef = useRef<HTMLDivElement>(null);
   const [a4Scale, setA4Scale] = useState(1);
@@ -102,11 +108,14 @@ export default function QuotationPage() {
 
   useEffect(() => {
     const onlyStars = (value: string): boolean => /^\s*\*+\s*$/.test(value);
-    setForm((prev) => ({
-      ...prev,
-      attn: onlyStars(prev.attn) ? "" : prev.attn,
-      additionalInformation: onlyStars(prev.additionalInformation) ? "" : prev.additionalInformation,
-    }));
+    if (onlyStars(quotationContent.attn)) {
+      setQuotationContentField("attn", "");
+    }
+    if (onlyStars(quotationContent.additionalInformation)) {
+      setQuotationContentField("additionalInformation", "");
+    }
+    // run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -185,6 +194,31 @@ export default function QuotationPage() {
     void loadProfile();
   }, [user]);
 
+  const effectivePreparedFor = useMemo(
+    () => quotationContent.preparedForOverride.trim() || customerName,
+    [customerName, quotationContent.preparedForOverride],
+  );
+  const effectiveCustomerAddress = useMemo(
+    () => quotationContent.customerAddressOverride.trim() || customerAddress,
+    [customerAddress, quotationContent.customerAddressOverride],
+  );
+  const effectiveContactPerson = useMemo(
+    () => quotationContent.contactPersonOverride.trim() || accountName,
+    [accountName, quotationContent.contactPersonOverride],
+  );
+  const effectivePhoneNumber = useMemo(
+    () => quotationContent.phoneNumberOverride.trim() || accountPhone,
+    [accountPhone, quotationContent.phoneNumberOverride],
+  );
+  const effectiveSalesName = useMemo(
+    () => quotationContent.salesNameOverride.trim() || accountName,
+    [accountName, quotationContent.salesNameOverride],
+  );
+  const effectiveSalesEmail = useMemo(
+    () => quotationContent.salesEmailOverride.trim() || accountEmail,
+    [accountEmail, quotationContent.salesEmailOverride],
+  );
+
   const { ahuSummaries } = useMemo(
     () =>
       buildAhuSummaries({
@@ -209,9 +243,14 @@ export default function QuotationPage() {
   const ppnPercent = useMemo(() => Math.round(ppnRate * 100), [ppnRate]);
 
   const preview = useMemo(() => {
+    const discountRate = toDiscount(quotationContent.discount);
+    const hasAdditionalDiscount = quotationContent.additionalDiscount.trim().length > 0;
+    const additionalDiscountRate = toDiscount(quotationContent.additionalDiscount);
+    const quotationMarkupFactor = toQuotationMarkupFactor(discountRate);
+
     const items = ahuSummaries.map((summary) => {
       const quantity = Math.max(1, summary.ahu.quotationQty);
-      const price = summary.grandTotalIdr;
+      const price = summary.grandTotalIdr * quotationMarkupFactor;
       const total = quantity * price;
 
       return {
@@ -225,21 +264,35 @@ export default function QuotationPage() {
     });
 
     const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-    const discountRate = toDiscount(form.discount);
     const discountAmount = subtotal * discountRate;
-    const ppn = (subtotal - discountAmount) * ppnRate;
-    const grandTotal = subtotal - discountAmount + ppn;
+    const subtotalAfterDiscount = subtotal - discountAmount;
+    const additionalDiscountAmount = hasAdditionalDiscount
+      ? subtotalAfterDiscount * additionalDiscountRate
+      : 0;
+    const taxableSubtotal = subtotalAfterDiscount - additionalDiscountAmount;
+    const ppn = taxableSubtotal * ppnRate;
+    const grandTotal = taxableSubtotal + ppn;
 
     return {
       items,
+      hasAdditionalDiscount,
       discountRate,
+      additionalDiscountRate,
       subtotal,
       discountAmount,
+      additionalDiscountAmount,
       ppn,
       grandTotal,
-      contactPerson: [accountName, accountPhone].filter(Boolean).join(" / "),
+      contactPerson: [effectiveContactPerson, effectivePhoneNumber].filter(Boolean).join(" / "),
     };
-  }, [accountName, accountPhone, ahuSummaries, form.discount, ppnRate]);
+  }, [
+    ahuSummaries,
+    effectiveContactPerson,
+    effectivePhoneNumber,
+    quotationContent.additionalDiscount,
+    quotationContent.discount,
+    ppnRate,
+  ]);
 
   const quotationDate = useMemo(
     () =>
@@ -255,10 +308,6 @@ export default function QuotationPage() {
     const date = new Date();
     return `Q-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}`;
   }, []);
-
-  const setField = (key: keyof QuotationForm, value: string) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  };
 
   const applyBoldToControl = (
     control: HTMLInputElement | HTMLTextAreaElement | null,
@@ -286,6 +335,63 @@ export default function QuotationPage() {
     });
   };
 
+  const persist = async () => {
+    setSaveMessage(null);
+    setError(null);
+    setSaveBusy(true);
+
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const snapshot = getSnapshot();
+      const titleBase = projectName || customerName || "Quotation";
+      const title = `${titleBase} - ${new Intl.DateTimeFormat("id-ID", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(new Date())}`;
+
+      const activeId = getActiveDraftId();
+
+      if (activeId) {
+        const updated = await updateSummaryHistory(supabase, activeId, {
+          title,
+          customerName,
+          projectName,
+          snapshot,
+        });
+
+        if (!updated) {
+          // row was deleted/inaccessible -> fall back to insert
+          const created = await saveSummaryHistory(supabase, {
+            title,
+            customerName,
+            projectName,
+            snapshot,
+          });
+          setActiveDraftId(created.id);
+          setSaveMessage("Draft sebelumnya tidak ditemukan, tersimpan sebagai entry baru.");
+          return;
+        }
+
+        setSaveMessage("Quotation berhasil di-update di database.");
+        return;
+      }
+
+      const created = await saveSummaryHistory(supabase, {
+        title,
+        customerName,
+        projectName,
+        snapshot,
+      });
+      setActiveDraftId(created.id);
+      setSaveMessage("Quotation berhasil disimpan ke database.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal menyimpan ke database.");
+    } finally {
+      setSaveBusy(false);
+    }
+  };
+
   const downloadExcel = async () => {
     setBusy(true);
     setError(null);
@@ -297,19 +403,20 @@ export default function QuotationPage() {
         body: JSON.stringify({
           quotationDate,
           quotationNo,
-          preparedFor: customerName,
-          customerAddress,
-          attn: form.attn,
-          salesName: accountName,
-          salesEmail: accountEmail,
-          salesPhone: accountPhone,
+          preparedFor: effectivePreparedFor,
+          customerAddress: effectiveCustomerAddress,
+          attn: quotationContent.attn,
+          salesName: effectiveSalesName,
+          salesEmail: effectiveSalesEmail,
+          salesPhone: effectivePhoneNumber,
           items: preview.items.map((item) => ({
             description: item.description,
             quantity: item.quantity,
             price: item.price,
           })),
-          discount: form.discount,
-          additionalInformation: form.additionalInformation,
+          discount: quotationContent.discount,
+          additionalDiscount: quotationContent.additionalDiscount,
+          additionalInformation: quotationContent.additionalInformation,
           ppnRate,
         }),
       });
@@ -333,6 +440,14 @@ export default function QuotationPage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const resetOverrideToDefault = (key:
+    | "preparedForOverride"
+    | "customerAddressOverride"
+    | "contactPersonOverride"
+    | "phoneNumberOverride") => {
+    setQuotationContentField(key, "");
   };
 
   if (!isHydrated) {
@@ -361,24 +476,109 @@ export default function QuotationPage() {
             </p>
 
             <div className="form-grid">
-              <div className="auto-box">
-                <div className="auto-row">
-                  <span>Prepared For (Customer Name)</span>
-                  <strong>{customerName || "-"}</strong>
-                </div>
-                <div className="auto-row">
-                  <span>Customer Address</span>
-                  <strong>{customerAddress || "-"}</strong>
-                </div>
-                <div className="auto-row">
-                  <span>Contact Person</span>
-                  <strong>{accountName || "-"}</strong>
-                </div>
-                <div className="auto-row">
-                  <span>Phone Number</span>
-                  <strong>{accountPhone || "-"}</strong>
-                </div>
-              </div>
+              <fieldset className="item-box">
+                <legend>Detail Pelanggan & Sales</legend>
+                <p className="muted" style={{ marginBottom: 4 }}>
+                  Default diambil dari database. Bisa diubah; kosongkan untuk pakai default.
+                </p>
+
+                <label>
+                  <div className="field-label-row">
+                    <span>Prepared For (Customer Name)</span>
+                    {quotationContent.preparedForOverride ? (
+                      <button
+                        type="button"
+                        className="rpb-btn-ghost reset-default-btn"
+                        onClick={() => resetOverrideToDefault("preparedForOverride")}
+                        title="Pakai default dari database"
+                      >
+                        Reset
+                      </button>
+                    ) : null}
+                  </div>
+                  <input
+                    className="rpb-input"
+                    value={quotationContent.preparedForOverride || customerName}
+                    placeholder={customerName || "-"}
+                    onChange={(event) =>
+                      setQuotationContentField("preparedForOverride", event.target.value)
+                    }
+                  />
+                </label>
+
+                <label>
+                  <div className="field-label-row">
+                    <span>Customer Address</span>
+                    {quotationContent.customerAddressOverride ? (
+                      <button
+                        type="button"
+                        className="rpb-btn-ghost reset-default-btn"
+                        onClick={() => resetOverrideToDefault("customerAddressOverride")}
+                        title="Pakai default dari database"
+                      >
+                        Reset
+                      </button>
+                    ) : null}
+                  </div>
+                  <textarea
+                    className="rpb-input"
+                    rows={2}
+                    value={quotationContent.customerAddressOverride || customerAddress}
+                    placeholder={customerAddress || "-"}
+                    onChange={(event) =>
+                      setQuotationContentField("customerAddressOverride", event.target.value)
+                    }
+                  />
+                </label>
+
+                <label>
+                  <div className="field-label-row">
+                    <span>Contact Person</span>
+                    {quotationContent.contactPersonOverride ? (
+                      <button
+                        type="button"
+                        className="rpb-btn-ghost reset-default-btn"
+                        onClick={() => resetOverrideToDefault("contactPersonOverride")}
+                        title="Pakai default dari database"
+                      >
+                        Reset
+                      </button>
+                    ) : null}
+                  </div>
+                  <input
+                    className="rpb-input"
+                    value={quotationContent.contactPersonOverride || accountName}
+                    placeholder={accountName || "-"}
+                    onChange={(event) =>
+                      setQuotationContentField("contactPersonOverride", event.target.value)
+                    }
+                  />
+                </label>
+
+                <label>
+                  <div className="field-label-row">
+                    <span>Phone Number</span>
+                    {quotationContent.phoneNumberOverride ? (
+                      <button
+                        type="button"
+                        className="rpb-btn-ghost reset-default-btn"
+                        onClick={() => resetOverrideToDefault("phoneNumberOverride")}
+                        title="Pakai default dari database"
+                      >
+                        Reset
+                      </button>
+                    ) : null}
+                  </div>
+                  <input
+                    className="rpb-input"
+                    value={quotationContent.phoneNumberOverride || accountPhone}
+                    placeholder={accountPhone || "-"}
+                    onChange={(event) =>
+                      setQuotationContentField("phoneNumberOverride", event.target.value)
+                    }
+                  />
+                </label>
+              </fieldset>
 
               <label>
                 Attn
@@ -389,8 +589,8 @@ export default function QuotationPage() {
                     onClick={() =>
                       applyBoldToControl(
                         attnInputRef.current,
-                        () => form.attn,
-                        (value) => setField("attn", value),
+                        () => quotationContent.attn,
+                        (value) => setQuotationContentField("attn", value),
                       )
                     }
                     title="Bold teks terpilih"
@@ -401,8 +601,8 @@ export default function QuotationPage() {
                 <input
                   ref={attnInputRef}
                   className="rpb-input"
-                  value={form.attn}
-                  onChange={(event) => setField("attn", event.target.value)}
+                  value={quotationContent.attn}
+                  onChange={(event) => setQuotationContentField("attn", event.target.value)}
                 />
               </label>
 
@@ -474,8 +674,8 @@ export default function QuotationPage() {
                       onClick={() =>
                         applyBoldToControl(
                           additionalInfoRef.current,
-                          () => form.additionalInformation,
-                          (value) => setField("additionalInformation", value),
+                          () => quotationContent.additionalInformation,
+                          (value) => setQuotationContentField("additionalInformation", value),
                         )
                       }
                       title="Bold teks terpilih"
@@ -487,8 +687,10 @@ export default function QuotationPage() {
                     ref={additionalInfoRef}
                     className="rpb-input"
                     rows={12}
-                    value={form.additionalInformation}
-                    onChange={(event) => setField("additionalInformation", event.target.value)}
+                    value={quotationContent.additionalInformation}
+                    onChange={(event) =>
+                      setQuotationContentField("additionalInformation", event.target.value)
+                    }
                   />
                 </label>
               </fieldset>
@@ -497,18 +699,37 @@ export default function QuotationPage() {
                 Discount (%)
                 <input
                   className="rpb-input"
-                  value={form.discount}
-                  onChange={(event) => setField("discount", event.target.value)}
+                  value={quotationContent.discount}
+                  onChange={(event) => setQuotationContentField("discount", event.target.value)}
                 />
                 <span className="text-xs text-rpb-ink-soft">Contoh: 25% atau 0.25. Jangan tulis 25 tanpa %.</span>
               </label>
+              <label>
+                Additional Discount (%)
+                <input
+                  className="rpb-input"
+                  value={quotationContent.additionalDiscount}
+                  onChange={(event) => setQuotationContentField("additionalDiscount", event.target.value)}
+                />
+                <span className="text-xs text-rpb-ink-soft">Diskon tambahan dihitung setelah discount utama.</span>
+              </label>
 
               {error ? <div className="error-box">{error}</div> : null}
+              {saveMessage ? <div className="info-box">{saveMessage}</div> : null}
 
               <div className="actions">
                 <button
                   type="button"
                   className="rpb-btn-primary action-btn"
+                  onClick={() => void persist()}
+                  disabled={saveBusy}
+                  title="Simpan / update quotation aktif ke database"
+                >
+                  {saveBusy ? "Menyimpan..." : "Simpan"}
+                </button>
+                <button
+                  type="button"
+                  className="rpb-btn-ghost action-btn"
                   onClick={() => void downloadExcel()}
                   disabled={busy}
                 >
@@ -568,20 +789,20 @@ export default function QuotationPage() {
                     <div className="info-line">
                       <div className="info-label">Prepared For</div>
                       <div className="info-sep">:</div>
-                      <div className="info-value strong">{customerName || "-"}</div>
+                      <div className="info-value strong">{effectivePreparedFor || "-"}</div>
                     </div>
                     <div className="info-line info-line-address">
                       <div className="info-label" />
                       <div className="info-sep" />
                       <div className="info-value">
-                        <div>{customerAddress || "-"}</div>
+                        <div>{effectiveCustomerAddress || "-"}</div>
                       </div>
                     </div>
                     <div className="info-line info-line-attn">
                       <div className="info-label">Attn</div>
                       <div className="info-sep">:</div>
                       <div className="info-value strong">
-                        {form.attn ? renderRichMultilineText(form.attn) : "-"}
+                        {quotationContent.attn ? renderRichMultilineText(quotationContent.attn) : "-"}
                       </div>
                     </div>
                   </section>
@@ -607,7 +828,7 @@ export default function QuotationPage() {
                         </tr>
                       ))}
                       <tr className="summary-row summary-start">
-                        <td className="summary-empty" colSpan={2} rowSpan={4} />
+                        <td className="summary-empty" colSpan={2} rowSpan={preview.hasAdditionalDiscount ? 5 : 4} />
                         <td className="summary-label" colSpan={2}>Subtotal</td>
                         <td className="summary-value">{currencyFormatter.format(preview.subtotal)}</td>
                       </tr>
@@ -617,6 +838,16 @@ export default function QuotationPage() {
                         </td>
                         <td className="summary-value">{currencyFormatter.format(preview.discountAmount)}</td>
                       </tr>
+                      {preview.hasAdditionalDiscount ? (
+                        <tr className="summary-row">
+                          <td className="summary-label" colSpan={2}>
+                            Additional Discount ({(preview.additionalDiscountRate * 100).toFixed(2)}%)
+                          </td>
+                          <td className="summary-value">
+                            {currencyFormatter.format(preview.additionalDiscountAmount)}
+                          </td>
+                        </tr>
+                      ) : null}
                       <tr className="summary-row">
                         <td className="summary-label" colSpan={2}>PPN {ppnPercent}%</td>
                         <td className="summary-value">{currencyFormatter.format(preview.ppn)}</td>
@@ -630,17 +861,17 @@ export default function QuotationPage() {
 
                   <section className="terms">
                     <div className="terms-list plain-text">
-                      {form.additionalInformation.trim().length > 0
-                        ? renderRichMultilineText(form.additionalInformation)
+                      {quotationContent.additionalInformation.trim().length > 0
+                        ? renderRichMultilineText(quotationContent.additionalInformation)
                         : "-"}
                     </div>
                   </section>
 
                   <footer className="sign-block">
                     <div>Best Regards</div>
-                    <div className="sign-name">{accountName || "-"}</div>
+                    <div className="sign-name">{effectiveSalesName || "-"}</div>
                     <div className="sign-company">PT Klimatek</div>
-                    <div className="sign-email">Email : {accountEmail || "-"}</div>
+                    <div className="sign-email">Email : {effectiveSalesEmail || "-"}</div>
                   </footer>
                 </article>
               </div>
@@ -648,7 +879,7 @@ export default function QuotationPage() {
           </section>
         </div>
 
-        <div className="mt-3 flex justify-end gap-2 no-print">
+        <div className="footer-actions mt-3 no-print">
           <Link
             href="/"
             className="rpb-btn-ghost inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold"
@@ -673,11 +904,10 @@ export default function QuotationPage() {
         .quotation-panel h1, .quotation-panel h2, .quotation-panel h3 { margin: 0 0 12px; }
         .muted { color: var(--rpb-ink-soft); margin: 0 0 16px; font-size: 13px; }
         .form-grid { display: grid; gap: 12px; }
-        .auto-box { border: 1px solid var(--rpb-border); border-radius: 10px; background: #f8fafc; padding: 10px 12px; display: grid; gap: 8px; }
-        .auto-row { display: grid; gap: 2px; }
-        .auto-row span { color: var(--rpb-ink-soft); font-size: 12px; }
-        .auto-row strong { font-size: 14px; white-space: pre-line; word-break: break-word; }
         label { display: grid; gap: 6px; font-size: 14px; }
+        .field-label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .field-label-row span { color: var(--rpb-ink-soft); font-size: 12px; font-weight: 600; }
+        .reset-default-btn { font-size: 11px; padding: 2px 8px; height: auto; line-height: 1.2; cursor: pointer; }
         .field-toolbar { display: flex; justify-content: flex-end; margin-top: -2px; margin-bottom: 2px; }
         .text-style-btn { width: 30px; height: 28px; font-weight: 800; font-size: 14px; line-height: 1; cursor: pointer; }
         textarea { resize: vertical; min-height: 90px; }
@@ -685,7 +915,9 @@ export default function QuotationPage() {
         legend { padding: 0 8px; color: var(--rpb-ink-soft); font-weight: 600; font-size: 13px; }
         .actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
         .action-btn { padding: 10px 14px; font-weight: 700; cursor: pointer; }
+        .footer-actions { margin-top: 12px; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
         .error-box { border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; border-radius: 10px; padding: 10px 12px; font-size: 13px; white-space: pre-wrap; }
+        .info-box { border: 1px solid #bbf7d0; background: #f0fdf4; color: #166534; border-radius: 10px; padding: 10px 12px; font-size: 13px; white-space: pre-wrap; }
         .a4-stage { margin-top: 12px; padding: 14px; border: 1px solid var(--rpb-border); border-radius: 10px; background: #eef2f7; overflow: hidden; display: flex; justify-content: center; }
         .a4-page-shell { width: 100%; min-width: 0; display: flex; justify-content: center; align-items: flex-start; }
         .a4-page { width: ${A4_WIDTH_PX}px; min-height: ${A4_HEIGHT_PX}px; box-sizing: border-box; background: #fff; color: #111; font-family: Calibri, Arial, sans-serif; font-size: 11px; line-height: 1.2; padding: 10mm; box-shadow: 0 14px 24px rgba(15, 23, 42, 0.14); transform-origin: top center; }
@@ -729,6 +961,8 @@ export default function QuotationPage() {
           .quotation-panel { border-radius: 12px; padding: 14px; }
           .actions { justify-content: stretch; }
           .action-btn { width: 100%; }
+          .footer-actions { justify-content: stretch; }
+          .footer-actions > * { width: 100%; justify-content: center; }
           .a4-stage { padding: 8px; }
         }
       `}</style>

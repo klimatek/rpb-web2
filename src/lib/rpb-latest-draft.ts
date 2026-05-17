@@ -118,3 +118,30 @@ export const clearLatestDraft = (): void => {
 
   window.localStorage.removeItem(LATEST_DRAFT_KEY);
 };
+
+const ACTIVE_DRAFT_ID_KEY = "rpb-active-draft-id-v1";
+
+export const getActiveDraftId = (): string | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const value = window.localStorage.getItem(ACTIVE_DRAFT_ID_KEY);
+  return value && value.length > 0 ? value : null;
+};
+
+export const setActiveDraftId = (id: string): void => {
+  if (typeof window === "undefined" || !id) {
+    return;
+  }
+
+  window.localStorage.setItem(ACTIVE_DRAFT_ID_KEY, id);
+};
+
+export const clearActiveDraftId = (): void => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(ACTIVE_DRAFT_ID_KEY);
+};

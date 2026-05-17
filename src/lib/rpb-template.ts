@@ -1,4 +1,10 @@
-import type { AhuDraft, CustomOtherItem, RpbDraftSnapshot, SavedSummaryRecord } from "@/types/rpb";
+import type {
+  AhuDraft,
+  CustomOtherItem,
+  QuotationContent,
+  RpbDraftSnapshot,
+  SavedSummaryRecord,
+} from "@/types/rpb";
 import { MAX_AHU_PER_QUOTATION } from "@/types/rpb";
 
 export const RPB_TEMPLATE_KIND = "rpb-template";
@@ -171,6 +177,32 @@ const buildLegacySingleAhu = (value: Record<string, unknown>, projectName: strin
   };
 };
 
+const normalizeQuotationContent = (value: unknown): QuotationContent | undefined => {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  return {
+    attn: typeof value.attn === "string" ? value.attn : "",
+    discount: typeof value.discount === "string" ? value.discount : "25%",
+    additionalDiscount: typeof value.additionalDiscount === "string" ? value.additionalDiscount : "",
+    additionalInformation:
+      typeof value.additionalInformation === "string" ? value.additionalInformation : "",
+    preparedForOverride:
+      typeof value.preparedForOverride === "string" ? value.preparedForOverride : "",
+    customerAddressOverride:
+      typeof value.customerAddressOverride === "string" ? value.customerAddressOverride : "",
+    contactPersonOverride:
+      typeof value.contactPersonOverride === "string" ? value.contactPersonOverride : "",
+    phoneNumberOverride:
+      typeof value.phoneNumberOverride === "string" ? value.phoneNumberOverride : "",
+    salesNameOverride:
+      typeof value.salesNameOverride === "string" ? value.salesNameOverride : "",
+    salesEmailOverride:
+      typeof value.salesEmailOverride === "string" ? value.salesEmailOverride : "",
+  };
+};
+
 export const normalizeRpbDraftSnapshot = (value: unknown): RpbDraftSnapshot => {
   if (!isRecord(value)) {
     throw new Error("Snapshot template tidak valid.");
@@ -195,7 +227,7 @@ export const normalizeRpbDraftSnapshot = (value: unknown): RpbDraftSnapshot => {
           ),
         ];
 
-  return {
+  const snapshot: RpbDraftSnapshot = {
     customerName: normalizeText(value.customerName, "", 180),
     projectName,
     customerAddress: normalizeText(value.customerAddress, "", 240),
@@ -207,6 +239,17 @@ export const normalizeRpbDraftSnapshot = (value: unknown): RpbDraftSnapshot => {
       profit: toPercent(adjustments.profit),
     },
   };
+
+  const quotationContent = normalizeQuotationContent(value.quotationContent);
+  if (quotationContent) {
+    snapshot.quotationContent = quotationContent;
+  }
+
+  if (typeof value.schemaVersion === "number" && Number.isFinite(value.schemaVersion)) {
+    snapshot.schemaVersion = value.schemaVersion;
+  }
+
+  return snapshot;
 };
 
 export interface RpbTemplatePayload {

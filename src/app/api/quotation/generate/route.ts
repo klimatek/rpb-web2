@@ -30,6 +30,7 @@ type Payload = {
   itemPrice?: number | string;
   item1Price?: number | string;
   discount?: number | string;
+  additionalDiscount?: number | string;
   itemDiscount?: number | string;
   item1Discount?: number | string;
   items?: Array<{
@@ -156,8 +157,12 @@ async function createWorkbookBuffer(payload: Payload): Promise<Buffer> {
 
   const items = normalizeItems(payload);
   const discount = toDiscount(payload.discount || payload.itemDiscount || payload.item1Discount);
+  const additionalDiscount = toDiscount(payload.additionalDiscount);
   const addressCombined = [addressLine1, addressLine2].filter(Boolean).join("\n") || "-";
   const discountRateLiteral = Number.isFinite(discount) ? String(discount) : "0";
+  const additionalDiscountRateLiteral = Number.isFinite(additionalDiscount)
+    ? String(additionalDiscount)
+    : "0";
   const parsedAdditional = parseAdditionalInformationSections(text(payload.additionalInformation));
   const termsConditionLines = parsedAdditional.conditionLines.map((line) => stripBoldMarkers(line));
   const termsPaymentLines = parsedAdditional.paymentLines.map((line) => stripBoldMarkers(line));
@@ -219,17 +224,26 @@ async function createWorkbookBuffer(payload: Payload): Promise<Buffer> {
   for (let row = 26; row <= 33; row += 1) {
     sheet.row(row).hidden(true);
   }
-  for (let row = 34; row <= 37; row += 1) {
+  for (let row = 34; row <= 38; row += 1) {
     sheet.row(row).hidden(false);
   }
 
-  ["E34:F34", "E35:F35", "E36:F36", "E37:F37", "G34:H34", "G35:H35", "G36:H36", "G37:H37"].forEach(
-    (range) => {
-      sheet.range(range).merged(false);
-    },
-  );
+  [
+    "E34:F34",
+    "E35:F35",
+    "E36:F36",
+    "E37:F37",
+    "E38:F38",
+    "G34:H34",
+    "G35:H35",
+    "G36:H36",
+    "G37:H37",
+    "G38:H38",
+  ].forEach((range) => {
+    sheet.range(range).merged(false);
+  });
   ["A", "B", "C", "D", "E", "F", "G", "H"].forEach((col) => {
-    for (let row = 34; row <= 37; row += 1) {
+    for (let row = 34; row <= 38; row += 1) {
       sheet.cell(`${col}${row}`).formula(null).value(null);
     }
   });
@@ -240,10 +254,12 @@ async function createWorkbookBuffer(payload: Payload): Promise<Buffer> {
   sheet.cell("G34").formula('IF(SUM(G15:G24)=0,"",SUM(G15:G24))');
   sheet.cell("E35").value(`Discount (${(discount * 100).toFixed(2)}%)`);
   sheet.cell("G35").formula(`IF(G34="","",G34*${discountRateLiteral})`);
-  sheet.cell("E36").value(`PPN ${ppnPercent}%`);
-  sheet.cell("G36").formula(`IF(G34="","",(G34-G35)*${ppnRate})`);
-  sheet.cell("E37").value("Grand Total");
-  sheet.cell("G37").formula('IF(G34="","",G34-G35+G36)');
+  sheet.cell("E36").value(`Additional Discount (${(additionalDiscount * 100).toFixed(2)}%)`);
+  sheet.cell("G36").formula(`IF(G34="","",(G34-G35)*${additionalDiscountRateLiteral})`);
+  sheet.cell("E37").value(`PPN ${ppnPercent}%`);
+  sheet.cell("G37").formula(`IF(G34="","",(G34-G35-G36)*${ppnRate})`);
+  sheet.cell("E38").value("Grand Total");
+  sheet.cell("G38").formula('IF(G34="","",G34-G35-G36+G37)');
 
   const qtyNumberFormat = "#,##0";
   const currencyNumberFormat = '"Rp" #,##0';
@@ -252,24 +268,26 @@ async function createWorkbookBuffer(payload: Payload): Promise<Buffer> {
     sheet.cell(`F${row}`).style("numberFormat", currencyNumberFormat);
     sheet.cell(`G${row}`).style("numberFormat", currencyNumberFormat);
   }
-  for (let row = 34; row <= 37; row += 1) {
+  for (let row = 34; row <= 38; row += 1) {
     sheet.range(`E${row}:F${row}`).style("horizontalAlignment", "right");
     sheet.cell(`G${row}`).style("horizontalAlignment", "right");
     sheet.cell(`G${row}`).style("numberFormat", currencyNumberFormat);
   }
-  sheet.range("E37:F37").style("bold", true);
-  sheet.cell("G37").style("bold", true);
+  sheet.range("E38:F38").style("bold", true);
+  sheet.cell("G38").style("bold", true);
 
   [
     "E34:F34",
     "E35:F35",
     "E36:F36",
     "E37:F37",
+    "E38:F38",
     "G14:H14",
     "G34:H34",
     "G35:H35",
     "G36:H36",
     "G37:H37",
+    "G38:H38",
   ].forEach((range) => {
     sheet.range(range).merged(true);
     sheet.range(range).style("border", {
@@ -287,11 +305,11 @@ async function createWorkbookBuffer(payload: Payload): Promise<Buffer> {
   });
 
   ["A", "B", "C", "D"].forEach((col) => {
-    for (let row = 34; row <= 37; row += 1) {
+    for (let row = 34; row <= 38; row += 1) {
       sheet.cell(`${col}${row}`).style("border", {});
     }
   });
-  for (let row = 34; row <= 37; row += 1) {
+  for (let row = 34; row <= 38; row += 1) {
     sheet.range(`E${row}:F${row}`).style("border", {
       top: true,
       left: true,

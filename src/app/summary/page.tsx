@@ -8,10 +8,24 @@ import {
 import { RpbPageFrame } from "@/components/layout/rpb-page-frame";
 import { useRpbMasterData } from "@/hooks/use-rpb-master-data";
 import { buildAhuSummaries } from "@/lib/rpb-line-items";
-import { saveSummaryHistory } from "@/lib/rpb-db";
+import { saveSummaryHistory, updateSummaryHistory } from "@/lib/rpb-db";
+import {
+  getActiveDraftId,
+  setActiveDraftId,
+} from "@/lib/rpb-latest-draft";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useRpbStore } from "@/store/rpb-store";
-import { ArrowLeft, ChevronDown, ChevronUp, Download, FileText, Minus, Plus, RotateCcw, Save } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  FileText,
+  Minus,
+  Plus,
+  RotateCcw,
+  Save,
+} from "lucide-react";
 import type { RowInput } from "jspdf-autotable";
 import Link from "next/link";
 import type { FocusEvent, FormEvent } from "react";
@@ -143,15 +157,43 @@ export default function SummaryPage() {
   const submitSaveState = async (rawTitle: string) => {
     setSaveBusy(true);
     setSaveMessage(null);
+
     try {
       const supabase = getSupabaseBrowserClient();
-      await saveSummaryHistory(supabase, {
-        title: rawTitle.trim() || projectName || "RPB Summary",
-        customerName,
-        projectName,
-        snapshot: getSnapshot(),
-      });
-      setSaveMessage("History berhasil disimpan ke database.");
+      const title = rawTitle.trim() || projectName || "RPB Summary";
+      const snapshot = getSnapshot();
+      const activeId = getActiveDraftId();
+
+      if (activeId) {
+        const updated = await updateSummaryHistory(supabase, activeId, {
+          title,
+          customerName,
+          projectName,
+          snapshot,
+        });
+
+        if (!updated) {
+          const created = await saveSummaryHistory(supabase, {
+            title,
+            customerName,
+            projectName,
+            snapshot,
+          });
+          setActiveDraftId(created.id);
+          setSaveMessage("Draft sebelumnya tidak ditemukan, tersimpan sebagai entry baru.");
+        } else {
+          setSaveMessage("Quotation berhasil di-update di database.");
+        }
+      } else {
+        const created = await saveSummaryHistory(supabase, {
+          title,
+          customerName,
+          projectName,
+          snapshot,
+        });
+        setActiveDraftId(created.id);
+        setSaveMessage("Quotation berhasil disimpan ke database.");
+      }
       setSaveModalOpen(false);
     } catch (error) {
       setSaveMessage(
@@ -688,17 +730,10 @@ export default function SummaryPage() {
                 className="rpb-btn-ghost inline-flex h-11 items-center justify-center gap-2 px-4 py-2 text-sm font-semibold"
                 onClick={openSaveModal}
                 disabled={saveBusy}
+                title="Simpan / update quotation aktif ke database"
               >
                 <Save size={15} />
-                {saveBusy ? "Menyimpan..." : "Simpan Draft"}
-              </button>
-              <button
-                type="button"
-                className="rpb-btn-ghost inline-flex h-11 items-center justify-center gap-2 px-4 py-2 text-sm font-semibold"
-                onClick={() => void downloadPdf()}
-              >
-                <Download size={15} />
-                Unduh PDF
+                {saveBusy ? "Menyimpan..." : "Simpan"}
               </button>
               <Link
                 href="/quotation"
@@ -707,6 +742,14 @@ export default function SummaryPage() {
                 <FileText size={15} />
                 Buat Penawaran
               </Link>
+              <button
+                type="button"
+                className="rpb-btn-ghost inline-flex h-11 items-center justify-center gap-2 px-4 py-2 text-sm font-semibold"
+                onClick={() => void downloadPdf()}
+              >
+                <Download size={15} />
+                Unduh PDF
+              </button>
             </div>
           </div>
         </section>
@@ -716,9 +759,10 @@ export default function SummaryPage() {
         <div className="rpb-modal-backdrop fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-[#15172b]/45 p-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] backdrop-blur-[2px] md:items-center md:pb-6">
           <div className="rpb-modal-panel flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-rpb-border bg-white shadow-xl">
             <div className="rpb-topbar px-5 py-4 text-white">
-              <h3 className="rpb-h-title text-lg font-semibold">Simpan Riwayat</h3>
+              <h3 className="rpb-h-title text-lg font-semibold">Simpan Quotation</h3>
             </div>
             <form className="space-y-4 overflow-y-auto p-5" onSubmit={handleSaveModalSubmit}>
+              <p className="text-xs text-rpb-ink-soft">Update quotation aktif. Jika belum ada, akan dibuat entry baru.</p>
               <label className="flex flex-col gap-2 text-sm font-semibold text-rpb-ink-soft">
                 Nama history (opsional)
                 <input

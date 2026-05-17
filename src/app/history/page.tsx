@@ -17,6 +17,7 @@ import {
   fetchSummaryHistory,
   saveSummaryHistory,
 } from "@/lib/rpb-db";
+import { setActiveDraftId } from "@/lib/rpb-latest-draft";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useRpbStore } from "@/store/rpb-store";
 import type { SavedSummaryRecord } from "@/types/rpb";
@@ -73,6 +74,7 @@ export default function HistoryPage() {
 
   const handleUse = (record: SavedSummaryRecord) => {
     loadSnapshot(record.snapshot);
+    setActiveDraftId(record.id);
     router.push("/summary");
   };
 
