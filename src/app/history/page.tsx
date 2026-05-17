@@ -229,6 +229,9 @@ export default function HistoryPage() {
                         Address: {item.snapshot.customerAddress || "-"}
                       </p>
                       <p className="text-xs text-rpb-ink-soft">
+                        Jumlah AHU: {Array.isArray(item.snapshot.ahus) ? item.snapshot.ahus.length : 1}
+                      </p>
+                      <p className="text-xs text-rpb-ink-soft">
                         Dibuat oleh: {item.createdByEmail || "-"}
                       </p>
                       <p className="text-xs text-rpb-ink-soft">

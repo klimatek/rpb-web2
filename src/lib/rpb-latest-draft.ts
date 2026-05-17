@@ -7,6 +7,7 @@ const DEFAULT_DIMENSIONS = {
   width: 1100,
   height: 950,
 } as const;
+const DEFAULT_QUOTATION_QTY = 1;
 
 const DEFAULT_ADJUSTMENTS = {
   stockReturn: 3,
@@ -28,16 +29,31 @@ export const isMeaningfulDraftSnapshot = (snapshot: RpbDraftSnapshot): boolean =
     snapshot.projectName.trim().length > 0 ||
     snapshot.customerAddress.trim().length > 0;
 
-  const hasDimensionChanges =
-    snapshot.dimensions.length !== DEFAULT_DIMENSIONS.length ||
-    snapshot.dimensions.width !== DEFAULT_DIMENSIONS.width ||
-    snapshot.dimensions.height !== DEFAULT_DIMENSIONS.height;
+  const hasAhuChanges = snapshot.ahus.some((ahu) => {
+    const hasDimensionChanges =
+      ahu.dimensions.length !== DEFAULT_DIMENSIONS.length ||
+      ahu.dimensions.width !== DEFAULT_DIMENSIONS.width ||
+      ahu.dimensions.height !== DEFAULT_DIMENSIONS.height;
 
-  const hasPanelChange = snapshot.panelThickness !== 30;
+    const hasPanelChange = ahu.panelThickness !== 30;
+    const hasStockSelections = Object.values(ahu.selectedOther).some((qty) => isFinitePositive(qty));
+    const hasCustomSelections = ahu.customOtherItems.some((item) => isFinitePositive(item.qty));
+    const hasDescription = ahu.quotationDescription.trim().length > 0 && ahu.quotationDescription !== ahu.name;
+    const hasQuotationQtyChange = ahu.quotationQty !== DEFAULT_QUOTATION_QTY;
+    const hasNameChange = ahu.name.trim().length > 0 && ahu.name !== "AHU 1";
 
-  const hasStockSelections = Object.values(snapshot.selectedOther).some((qty) => isFinitePositive(qty));
+    return (
+      hasDimensionChanges ||
+      hasPanelChange ||
+      hasStockSelections ||
+      hasCustomSelections ||
+      hasDescription ||
+      hasQuotationQtyChange ||
+      hasNameChange
+    );
+  });
 
-  const hasCustomSelections = snapshot.customOtherItems.some((item) => isFinitePositive(item.qty));
+  const hasMultipleAhus = snapshot.ahus.length > 1;
 
   const hasAdjustmentChanges =
     snapshot.adjustments.stockReturn !== DEFAULT_ADJUSTMENTS.stockReturn ||
@@ -47,10 +63,8 @@ export const isMeaningfulDraftSnapshot = (snapshot: RpbDraftSnapshot): boolean =
 
   return (
     hasText ||
-    hasDimensionChanges ||
-    hasPanelChange ||
-    hasStockSelections ||
-    hasCustomSelections ||
+    hasAhuChanges ||
+    hasMultipleAhus ||
     hasAdjustmentChanges
   );
 };

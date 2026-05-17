@@ -1,4 +1,5 @@
-import type { CustomOtherItem, RpbDraftSnapshot, SavedSummaryRecord } from "@/types/rpb";
+import type { AhuDraft, CustomOtherItem, RpbDraftSnapshot, SavedSummaryRecord } from "@/types/rpb";
+import { MAX_AHU_PER_QUOTATION } from "@/types/rpb";
 
 export const RPB_TEMPLATE_KIND = "rpb-template";
 export const RPB_TEMPLATE_VERSION = 1;
@@ -10,6 +11,8 @@ const DEFAULT_DIMENSIONS = {
   width: 1100,
   height: 950,
 } as const;
+const DEFAULT_PANEL_THICKNESS = 30;
+const DEFAULT_QUOTATION_QTY = 1;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -91,6 +94,83 @@ const normalizeSelectedOther = (value: unknown): Record<string, number> => {
   );
 };
 
+const normalizeAhuName = (value: unknown, index: number): string => {
+  const fallback = `AHU ${index + 1}`;
+  return normalizeText(value, fallback, 120);
+};
+
+const normalizeQuotationDescription = (
+  value: unknown,
+  ahuName: string,
+): string => normalizeText(value, ahuName, 400);
+
+const normalizeQuotationQty = (value: unknown): number => {
+  const qty = toQty(value);
+  return qty > 0 ? qty : DEFAULT_QUOTATION_QTY;
+};
+
+const normalizeSingleAhuDraft = (value: unknown, index: number): AhuDraft | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const dimensions = isRecord(value.dimensions) ? value.dimensions : {};
+  const name = normalizeAhuName(value.name, index);
+
+  return {
+    id: normalizeText(value.id, `ahu-${index + 1}`, 80),
+    name,
+    dimensions: {
+      length: toNonNegativeNumber(dimensions.length, DEFAULT_DIMENSIONS.length),
+      width: toNonNegativeNumber(dimensions.width, DEFAULT_DIMENSIONS.width),
+      height: toNonNegativeNumber(dimensions.height, DEFAULT_DIMENSIONS.height),
+    },
+    panelThickness: value.panelThickness === 45 ? 45 : DEFAULT_PANEL_THICKNESS,
+    selectedOther: normalizeSelectedOther(value.selectedOther),
+    customOtherItems: normalizeCustomOtherItems(value.customOtherItems),
+    quotationDescription: normalizeQuotationDescription(value.quotationDescription, name),
+    quotationQty: normalizeQuotationQty(value.quotationQty),
+  };
+};
+
+const normalizeAhus = (value: unknown, projectName: string): AhuDraft[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .slice(0, MAX_AHU_PER_QUOTATION)
+    .map((ahu, index) => normalizeSingleAhuDraft(ahu, index))
+    .filter((ahu): ahu is AhuDraft => ahu !== null)
+    .map((ahu, index) => ({
+      ...ahu,
+      id: ahu.id || `ahu-${index + 1}`,
+      name: ahu.name || `AHU ${index + 1}`,
+      quotationDescription:
+        ahu.quotationDescription || projectName || ahu.name || `AHU ${index + 1}`,
+    }));
+};
+
+const buildLegacySingleAhu = (value: Record<string, unknown>, projectName: string): AhuDraft => {
+  const dimensions = isRecord(value.dimensions) ? value.dimensions : {};
+  const name = "AHU 1";
+
+  return {
+    id: "ahu-1",
+    name,
+    dimensions: {
+      length: toNonNegativeNumber(dimensions.length, DEFAULT_DIMENSIONS.length),
+      width: toNonNegativeNumber(dimensions.width, DEFAULT_DIMENSIONS.width),
+      height: toNonNegativeNumber(dimensions.height, DEFAULT_DIMENSIONS.height),
+    },
+    panelThickness: value.panelThickness === 45 ? 45 : DEFAULT_PANEL_THICKNESS,
+    selectedOther: normalizeSelectedOther(value.selectedOther),
+    customOtherItems: normalizeCustomOtherItems(value.customOtherItems),
+    quotationDescription: projectName || name,
+    quotationQty: DEFAULT_QUOTATION_QTY,
+  };
+};
+
 export const normalizeRpbDraftSnapshot = (value: unknown): RpbDraftSnapshot => {
   if (!isRecord(value)) {
     throw new Error("Snapshot template tidak valid.");
@@ -98,19 +178,28 @@ export const normalizeRpbDraftSnapshot = (value: unknown): RpbDraftSnapshot => {
 
   const dimensions = isRecord(value.dimensions) ? value.dimensions : {};
   const adjustments = isRecord(value.adjustments) ? value.adjustments : {};
+  const projectName = normalizeText(value.projectName, "", 180);
+  const ahus = normalizeAhus(value.ahus, projectName);
+  const normalizedAhus =
+    ahus.length > 0
+      ? ahus
+      : [
+          buildLegacySingleAhu(
+            {
+              dimensions,
+              panelThickness: value.panelThickness,
+              selectedOther: value.selectedOther,
+              customOtherItems: value.customOtherItems,
+            },
+            projectName,
+          ),
+        ];
 
   return {
     customerName: normalizeText(value.customerName, "", 180),
-    projectName: normalizeText(value.projectName, "", 180),
+    projectName,
     customerAddress: normalizeText(value.customerAddress, "", 240),
-    dimensions: {
-      length: toNonNegativeNumber(dimensions.length, DEFAULT_DIMENSIONS.length),
-      width: toNonNegativeNumber(dimensions.width, DEFAULT_DIMENSIONS.width),
-      height: toNonNegativeNumber(dimensions.height, DEFAULT_DIMENSIONS.height),
-    },
-    panelThickness: value.panelThickness === 45 ? 45 : 30,
-    selectedOther: normalizeSelectedOther(value.selectedOther),
-    customOtherItems: normalizeCustomOtherItems(value.customOtherItems),
+    ahus: normalizedAhus,
     adjustments: {
       stockReturn: toPercent(adjustments.stockReturn),
       marketingCost: toPercent(adjustments.marketingCost),

@@ -32,6 +32,11 @@ type Payload = {
   discount?: number | string;
   itemDiscount?: number | string;
   item1Discount?: number | string;
+  items?: Array<{
+    description?: string;
+    quantity?: number | string;
+    price?: number | string;
+  }>;
   additionalInformation?: string;
   ppnRate?: number;
 };
@@ -60,6 +65,24 @@ function text(value: unknown): string {
 
 function plainText(value: unknown): string {
   return stripBoldMarkers(text(value));
+}
+
+function normalizeItems(payload: Payload): Array<{ description: string; quantity: number; price: number }> {
+  if (Array.isArray(payload.items) && payload.items.length > 0) {
+    return payload.items.slice(0, 10).map((item, index) => ({
+      description: plainText(item.description) || `AHU ${index + 1}`,
+      quantity: Math.max(1, toNumber(item.quantity)),
+      price: toNumber(item.price),
+    }));
+  }
+
+  return [
+    {
+      description: plainText(payload.itemDescription || payload.item1Description) || "-",
+      quantity: Math.max(1, toNumber(payload.quantity || payload.itemQuantity || payload.item1Quantity)),
+      price: toNumber(payload.price || payload.itemPrice || payload.item1Price),
+    },
+  ];
 }
 
 function buildContactPerson(salesName: unknown, salesPhone: unknown): string {
@@ -131,9 +154,7 @@ async function createWorkbookBuffer(payload: Payload): Promise<Buffer> {
   const salesName = plainText(payload.salesName) || "-";
   const salesEmail = plainText(payload.salesEmail) || "-";
 
-  const description = plainText(payload.itemDescription || payload.item1Description) || "-";
-  const quantity = toNumber(payload.quantity || payload.itemQuantity || payload.item1Quantity);
-  const price = toNumber(payload.price || payload.itemPrice || payload.item1Price);
+  const items = normalizeItems(payload);
   const discount = toDiscount(payload.discount || payload.itemDiscount || payload.item1Discount);
   const addressCombined = [addressLine1, addressLine2].filter(Boolean).join("\n") || "-";
   const discountRateLiteral = Number.isFinite(discount) ? String(discount) : "0";
@@ -164,12 +185,33 @@ async function createWorkbookBuffer(payload: Payload): Promise<Buffer> {
   sheet.cell("C12").formula(null).value(attn);
   sheet.cell("C11").style("wrapText", true);
 
-  sheet.cell("A15").value(1);
-  sheet.cell("B15").formula(null).value(description);
-  sheet.cell("E15").formula(null).value(quantity);
-  sheet.cell("F15").formula(null).value(price);
-  sheet.cell("G15").formula('IF(OR(E15="",F15=""),"",E15*F15)');
-  sheet.cell("H15").formula(null).value(null);
+  for (let row = 15; row <= 24; row += 1) {
+    ["A", "B", "E", "F", "G", "H"].forEach((col) => {
+      sheet.cell(`${col}${row}`).formula(null).value(null);
+    });
+    sheet.range(`G${row}:H${row}`).merged(false);
+    sheet.row(row).hidden(true);
+  }
+
+  items.forEach((item, index) => {
+    const row = 15 + index;
+    sheet.row(row).hidden(false);
+    sheet.cell(`A${row}`).value(index + 1);
+    sheet.cell(`B${row}`).formula(null).value(item.description);
+    sheet.cell(`B${row}`).style("wrapText", true);
+    sheet.cell(`E${row}`).formula(null).value(item.quantity);
+    sheet.cell(`F${row}`).formula(null).value(item.price);
+    sheet.cell(`G${row}`).formula(`IF(OR(E${row}="",F${row}=""),"",E${row}*F${row})`);
+    sheet.cell(`H${row}`).formula(null).value(null);
+    sheet.range(`G${row}:H${row}`).merged(true);
+    sheet.range(`A${row}:H${row}`).style("border", {
+      top: true,
+      left: true,
+      right: true,
+      bottom: true,
+    });
+  });
+  sheet.row(25).hidden(true);
 
   ["A26", "B26", "E26", "F26", "G26", "H26"].forEach((address) => {
     sheet.cell(address).formula(null).value(null);
@@ -195,7 +237,7 @@ async function createWorkbookBuffer(payload: Payload): Promise<Buffer> {
   sheet.cell("G26").formula(null).value(null);
   sheet.cell("H26").formula(null).value(null);
   sheet.cell("E34").value("Subtotal");
-  sheet.cell("G34").formula('IF(G15="","",G15)');
+  sheet.cell("G34").formula('IF(SUM(G15:G24)=0,"",SUM(G15:G24))');
   sheet.cell("E35").value(`Discount (${(discount * 100).toFixed(2)}%)`);
   sheet.cell("G35").formula(`IF(G34="","",G34*${discountRateLiteral})`);
   sheet.cell("E36").value(`PPN ${ppnPercent}%`);
@@ -205,9 +247,11 @@ async function createWorkbookBuffer(payload: Payload): Promise<Buffer> {
 
   const qtyNumberFormat = "#,##0";
   const currencyNumberFormat = '"Rp" #,##0';
-  sheet.cell("E15").style("numberFormat", qtyNumberFormat);
-  sheet.cell("F15").style("numberFormat", currencyNumberFormat);
-  sheet.cell("G15").style("numberFormat", currencyNumberFormat);
+  for (let row = 15; row <= 24; row += 1) {
+    sheet.cell(`E${row}`).style("numberFormat", qtyNumberFormat);
+    sheet.cell(`F${row}`).style("numberFormat", currencyNumberFormat);
+    sheet.cell(`G${row}`).style("numberFormat", currencyNumberFormat);
+  }
   for (let row = 34; row <= 37; row += 1) {
     sheet.range(`E${row}:F${row}`).style("horizontalAlignment", "right");
     sheet.cell(`G${row}`).style("horizontalAlignment", "right");
@@ -235,14 +279,6 @@ async function createWorkbookBuffer(payload: Payload): Promise<Buffer> {
       bottom: true,
     });
   });
-  sheet.range("G15:H25").merged(true);
-  sheet.range("G15:H25").style("border", {
-    top: true,
-    left: true,
-    right: true,
-    bottom: true,
-  });
-
   sheet.range("A14:H25").style("border", {
     top: true,
     left: true,

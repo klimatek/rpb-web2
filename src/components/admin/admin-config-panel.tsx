@@ -364,7 +364,7 @@ export function AdminConfigPanel({ initialData }: { initialData: RpbMasterData }
   const [data, setData] = useState<RpbMasterData>(initialData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dimensions = useRpbStore((state) => state.dimensions);
+  const dimensions = useRpbStore((state) => state.getActiveAhu().dimensions);
   const [profileRows, setProfileRows] = useState<ProfileMasterItem[]>([]);
   const [konstruksiRows, setKonstruksiRows] = useState<KonstruksiMasterItem[]>([]);
   const [otherRows, setOtherRows] = useState<OtherItem[]>([]);

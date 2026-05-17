@@ -2,11 +2,9 @@
 
 import { RpbPageFrame } from "@/components/layout/rpb-page-frame";
 import { useAuthSession } from "@/hooks/use-auth-session";
-import {
-  DEFAULT_ADDITIONAL_INFORMATION,
-} from "@/lib/quotation-content";
+import { DEFAULT_ADDITIONAL_INFORMATION } from "@/lib/quotation-content";
 import { useRpbMasterData } from "@/hooks/use-rpb-master-data";
-import { buildSummaryLineItems } from "@/lib/rpb-line-items";
+import { buildAhuSummaries } from "@/lib/rpb-line-items";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useRpbStore } from "@/store/rpb-store";
 import Image from "next/image";
@@ -15,15 +13,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type QuotationForm = {
   attn: string;
-  itemDescription: string;
-  quantity: string;
   discount: string;
   additionalInformation: string;
 };
 
-const numberFormatter = new Intl.NumberFormat("id-ID", {
-  maximumFractionDigits: 0,
-});
+const numberFormatter = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
 const currencyFormatter = new Intl.NumberFormat("id-ID", {
   style: "currency",
   currency: "IDR",
@@ -31,8 +25,6 @@ const currencyFormatter = new Intl.NumberFormat("id-ID", {
 });
 const A4_WIDTH_PX = 794;
 const A4_HEIGHT_PX = 1123;
-
-const pctToValue = (subtotal: number, pct: number): number => subtotal * (pct / 100);
 
 function toNumber(value: string): number {
   const parsed = Number(String(value ?? "").replace(/,/g, "").trim());
@@ -81,23 +73,19 @@ export default function QuotationPage() {
 
   const customerName = useRpbStore((state) => state.customerName);
   const customerAddress = useRpbStore((state) => state.customerAddress);
-  const projectName = useRpbStore((state) => state.projectName);
-  const dimensions = useRpbStore((state) => state.dimensions);
-  const panelThickness = useRpbStore((state) => state.panelThickness);
-  const selectedOther = useRpbStore((state) => state.selectedOther);
-  const customOtherItems = useRpbStore((state) => state.customOtherItems);
+  const ahus = useRpbStore((state) => state.ahus);
   const adjustments = useRpbStore((state) => state.adjustments);
+  const setAhuQuotationDescription = useRpbStore((state) => state.setAhuQuotationDescription);
+  const setAhuQuotationQty = useRpbStore((state) => state.setAhuQuotationQty);
 
   const [accountName, setAccountName] = useState("");
   const [accountPhone, setAccountPhone] = useState("");
   const [accountEmail, setAccountEmail] = useState("");
   const attnInputRef = useRef<HTMLInputElement>(null);
-  const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const additionalInfoRef = useRef<HTMLTextAreaElement>(null);
+  const descriptionRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const [form, setForm] = useState<QuotationForm>({
     attn: "",
-    itemDescription: projectName || "",
-    quantity: "1",
     discount: "25%",
     additionalInformation: DEFAULT_ADDITIONAL_INFORMATION,
   });
@@ -117,7 +105,6 @@ export default function QuotationPage() {
     setForm((prev) => ({
       ...prev,
       attn: onlyStars(prev.attn) ? "" : prev.attn,
-      itemDescription: onlyStars(prev.itemDescription) ? "" : prev.itemDescription,
       additionalInformation: onlyStars(prev.additionalInformation) ? "" : prev.additionalInformation,
     }));
   }, []);
@@ -134,17 +121,12 @@ export default function QuotationPage() {
       setA4Scale((prev) => (Math.abs(prev - nextScale) < 0.001 ? prev : nextScale));
     };
 
-    const measureNow = () => {
-      updateScale(shell.clientWidth);
-    };
-
+    const measureNow = () => updateScale(shell.clientWidth);
     measureNow();
 
     if (typeof ResizeObserver === "undefined") {
       window.addEventListener("resize", measureNow);
-      return () => {
-        window.removeEventListener("resize", measureNow);
-      };
+      return () => window.removeEventListener("resize", measureNow);
     }
 
     const observer = new ResizeObserver((entries) => {
@@ -152,9 +134,7 @@ export default function QuotationPage() {
       if (frameId !== null) {
         cancelAnimationFrame(frameId);
       }
-      frameId = requestAnimationFrame(() => {
-        updateScale(width);
-      });
+      frameId = requestAnimationFrame(() => updateScale(width));
     });
     observer.observe(shell);
 
@@ -205,37 +185,17 @@ export default function QuotationPage() {
     void loadProfile();
   }, [user]);
 
-  const { lineItems } = useMemo(
+  const { ahuSummaries } = useMemo(
     () =>
-      buildSummaryLineItems({
-        dimensions,
-        panelThickness,
+      buildAhuSummaries({
+        ahus,
+        adjustments,
         profileItems: masterData?.profileItems ?? [],
         konstruksiItems: masterData?.konstruksiItems ?? [],
         otherItems: masterData?.otherItems ?? [],
-        selectedOther,
-        customOtherItems,
       }),
-    [
-      customOtherItems,
-      dimensions,
-      masterData?.konstruksiItems,
-      masterData?.otherItems,
-      masterData?.profileItems,
-      panelThickness,
-      selectedOther,
-    ],
+    [adjustments, ahus, masterData?.konstruksiItems, masterData?.otherItems, masterData?.profileItems],
   );
-
-  const grandTotalRpb = useMemo(() => {
-    const subtotalIdr = lineItems.reduce((sum, item) => sum + item.hargaIdr * item.qty, 0);
-    const stockReturnIdr = pctToValue(subtotalIdr, adjustments.stockReturn);
-    const marketingCostIdr = pctToValue(subtotalIdr, adjustments.marketingCost);
-    const servicesIdr = pctToValue(subtotalIdr, adjustments.services);
-    const baseAfterAdjustIdr = subtotalIdr + stockReturnIdr + marketingCostIdr + servicesIdr;
-    const profitIdr = pctToValue(baseAfterAdjustIdr, adjustments.profit);
-    return baseAfterAdjustIdr + profitIdr;
-  }, [adjustments, lineItems]);
 
   const ppnRate = useMemo(() => {
     const variables = masterData?.formulaVariables ?? [];
@@ -249,16 +209,29 @@ export default function QuotationPage() {
   const ppnPercent = useMemo(() => Math.round(ppnRate * 100), [ppnRate]);
 
   const preview = useMemo(() => {
-    const quantity = Math.max(0, toNumber(form.quantity));
-    const price = grandTotalRpb;
-    const subtotal = quantity * price;
+    const items = ahuSummaries.map((summary) => {
+      const quantity = Math.max(1, summary.ahu.quotationQty);
+      const price = summary.grandTotalIdr;
+      const total = quantity * price;
+
+      return {
+        id: summary.ahu.id,
+        name: summary.ahu.name,
+        description: summary.ahu.quotationDescription,
+        quantity,
+        price,
+        total,
+      };
+    });
+
+    const subtotal = items.reduce((sum, item) => sum + item.total, 0);
     const discountRate = toDiscount(form.discount);
     const discountAmount = subtotal * discountRate;
     const ppn = (subtotal - discountAmount) * ppnRate;
     const grandTotal = subtotal - discountAmount + ppn;
+
     return {
-      quantity,
-      price,
+      items,
       discountRate,
       subtotal,
       discountAmount,
@@ -266,7 +239,7 @@ export default function QuotationPage() {
       grandTotal,
       contactPerson: [accountName, accountPhone].filter(Boolean).join(" / "),
     };
-  }, [accountName, accountPhone, form, grandTotalRpb, ppnRate]);
+  }, [accountName, accountPhone, ahuSummaries, form.discount, ppnRate]);
 
   const quotationDate = useMemo(
     () =>
@@ -287,32 +260,16 @@ export default function QuotationPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleDescriptionTab = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== "Tab") {
-      return;
-    }
-    event.preventDefault();
-    const el = event.currentTarget;
-    const start = el.selectionStart ?? 0;
-    const end = el.selectionEnd ?? 0;
-    const next = `${form.itemDescription.slice(0, start)}\t${form.itemDescription.slice(end)}`;
-    setField("itemDescription", next);
-    requestAnimationFrame(() => {
-      el.focus();
-      const cursor = start + 1;
-      el.setSelectionRange(cursor, cursor);
-    });
-  };
-
   const applyBoldToControl = (
     control: HTMLInputElement | HTMLTextAreaElement | null,
-    field: keyof QuotationForm,
+    getValue: () => string,
+    setValue: (value: string) => void,
   ) => {
     if (!control) return;
 
     const start = control.selectionStart ?? 0;
     const end = control.selectionEnd ?? 0;
-    const currentValue = form[field] as string;
+    const currentValue = getValue();
     const selected = currentValue.slice(start, end);
 
     if (!selected) {
@@ -322,7 +279,7 @@ export default function QuotationPage() {
 
     const wrapped = `**${selected}**`;
     const nextValue = `${currentValue.slice(0, start)}${wrapped}${currentValue.slice(end)}`;
-    setField(field, nextValue);
+    setValue(nextValue);
     requestAnimationFrame(() => {
       control.focus();
       control.setSelectionRange(start + 2, end + 2);
@@ -336,21 +293,21 @@ export default function QuotationPage() {
     try {
       const response = await fetch("/api/quotation/generate", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           quotationDate,
           quotationNo,
           preparedFor: customerName,
-          customerAddress: customerAddress,
+          customerAddress,
           attn: form.attn,
           salesName: accountName,
           salesEmail: accountEmail,
           salesPhone: accountPhone,
-          itemDescription: form.itemDescription,
-          quantity: Math.max(0, toNumber(form.quantity)),
-          price: grandTotalRpb,
+          items: preview.items.map((item) => ({
+            description: item.description,
+            quantity: item.quantity,
+            price: item.price,
+          })),
           discount: form.discount,
           additionalInformation: form.additionalInformation,
           ppnRate,
@@ -400,8 +357,7 @@ export default function QuotationPage() {
           <section className="quotation-panel">
             <h1>Quotation</h1>
             <p className="muted">
-              Data customer dan Contact Person diambil otomatis dari RPB dan informasi akun. Price
-              otomatis pakai Grand Total RPB.
+              Tiap AHU menjadi satu baris item quotation dengan qty dan price masing-masing.
             </p>
 
             <div className="form-grid">
@@ -430,7 +386,13 @@ export default function QuotationPage() {
                   <button
                     type="button"
                     className="rpb-btn-ghost text-style-btn"
-                    onClick={() => applyBoldToControl(attnInputRef.current, "attn")}
+                    onClick={() =>
+                      applyBoldToControl(
+                        attnInputRef.current,
+                        () => form.attn,
+                        (value) => setField("attn", value),
+                      )
+                    }
                     title="Bold teks terpilih"
                   >
                     B
@@ -445,53 +407,61 @@ export default function QuotationPage() {
               </label>
 
               <fieldset className="item-box">
-                <legend>Item</legend>
-                <label>
-                  Quotation Description
-                  <div className="field-toolbar">
-                    <button
-                      type="button"
-                      className="rpb-btn-ghost text-style-btn"
-                      onClick={() => applyBoldToControl(descriptionRef.current, "itemDescription")}
-                      title="Bold teks terpilih"
-                    >
-                      B
-                    </button>
-                  </div>
-                  <textarea
-                    ref={descriptionRef}
-                    className="rpb-input"
-                    rows={4}
-                    value={form.itemDescription}
-                    onChange={(event) => setField("itemDescription", event.target.value)}
-                    onKeyDown={handleDescriptionTab}
-                  />
-                </label>
-                <label>
-                  Quantity
-                  <input
-                    className="rpb-input"
-                    value={form.quantity}
-                    onChange={(event) => setField("quantity", event.target.value)}
-                  />
-                </label>
-                <label>
-                  Grand Total RPB (Auto)
-                  <input
-                    className="rpb-input"
-                    value={currencyFormatter.format(grandTotalRpb)}
-                    readOnly
-                  />
-                </label>
-                <label>
-                  Discount (%)
-                  <input
-                    className="rpb-input"
-                    value={form.discount}
-                    onChange={(event) => setField("discount", event.target.value)}
-                  />
-                  <span className="text-xs text-rpb-ink-soft">Contoh: 25% atau 0.25. Jangan tulis 25 tanpa %.</span>
-                </label>
+                <legend>Item per AHU</legend>
+                <div className="space-y-3">
+                  {preview.items.map((item, index) => (
+                    <article key={item.id} className="rounded-xl border border-rpb-border bg-white p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{item.name}</p>
+                          <p className="text-xs text-rpb-ink-soft">Baris quotation {index + 1}</p>
+                        </div>
+                        <button
+                          type="button"
+                          className="rpb-btn-ghost text-style-btn"
+                          onClick={() =>
+                            applyBoldToControl(
+                              descriptionRefs.current[item.id] ?? null,
+                              () => ahus.find((ahu) => ahu.id === item.id)?.quotationDescription ?? "",
+                              (value) => setAhuQuotationDescription(item.id, value),
+                            )
+                          }
+                          title="Bold teks terpilih"
+                        >
+                          B
+                        </button>
+                      </div>
+                      <label>
+                        Description
+                        <textarea
+                          ref={(element) => {
+                            descriptionRefs.current[item.id] = element;
+                          }}
+                          className="rpb-input"
+                          rows={3}
+                          value={ahus.find((ahu) => ahu.id === item.id)?.quotationDescription ?? ""}
+                          onChange={(event) => setAhuQuotationDescription(item.id, event.target.value)}
+                        />
+                      </label>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <label>
+                          Quantity
+                          <input
+                            className="rpb-input"
+                            value={ahus.find((ahu) => ahu.id === item.id)?.quotationQty ?? 1}
+                            onChange={(event) =>
+                              setAhuQuotationQty(item.id, Math.max(1, toNumber(event.target.value)))
+                            }
+                          />
+                        </label>
+                        <label>
+                          Price (Auto)
+                          <input className="rpb-input" value={currencyFormatter.format(item.price)} readOnly />
+                        </label>
+                      </div>
+                    </article>
+                  ))}
+                </div>
               </fieldset>
 
               <fieldset className="item-box">
@@ -502,7 +472,11 @@ export default function QuotationPage() {
                       type="button"
                       className="rpb-btn-ghost text-style-btn"
                       onClick={() =>
-                        applyBoldToControl(additionalInfoRef.current, "additionalInformation")
+                        applyBoldToControl(
+                          additionalInfoRef.current,
+                          () => form.additionalInformation,
+                          (value) => setField("additionalInformation", value),
+                        )
                       }
                       title="Bold teks terpilih"
                     >
@@ -518,6 +492,16 @@ export default function QuotationPage() {
                   />
                 </label>
               </fieldset>
+
+              <label>
+                Discount (%)
+                <input
+                  className="rpb-input"
+                  value={form.discount}
+                  onChange={(event) => setField("discount", event.target.value)}
+                />
+                <span className="text-xs text-rpb-ink-soft">Contoh: 25% atau 0.25. Jangan tulis 25 tanpa %.</span>
+              </label>
 
               {error ? <div className="error-box">{error}</div> : null}
 
@@ -540,122 +524,124 @@ export default function QuotationPage() {
             <div className="a4-stage">
               <div className="a4-page-shell" ref={a4ShellRef} style={{ height: `${A4_HEIGHT_PX * a4Scale}px` }}>
                 <article className="a4-page" style={{ transform: `scale(${a4Scale})` }}>
-                <header className="sheet-head">
-                  <Image
-                    src="/assets/template-logo.png"
-                    alt="Company Logo"
-                    className="sheet-logo"
-                    width={175}
-                    height={58}
-                    priority
-                  />
-                  <div className="sheet-head-right">
-                    <h3 className="sheet-title">QUOTATION</h3>
-                    <table className="meta-table">
-                      <tbody>
-                        <tr>
-                          <td>Date</td>
-                          <td>:</td>
-                          <td>{quotationDate}</td>
-                        </tr>
-                        <tr>
-                          <td>Quotation No</td>
-                          <td>:</td>
-                          <td>{quotationNo}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </header>
-                <div className="sheet-divider" />
-                <section className="company-block">
-                  <div>PT. Klimatek</div>
-                  <div>Jl. Tengsaw Kp. Babakan, Desa Tarikolot,</div>
-                  <div>RT. 003 RW. 005 Citeureup - Kab. Bogor</div>
-                  <div>Jawa Barat - Indonesia</div>
-                </section>
-
-                <section className="info-lines">
-                  <div className="info-line">
-                    <div className="info-label">Contact Person</div>
-                    <div className="info-sep">:</div>
-                    <div className="info-value">{preview.contactPerson || "-"}</div>
-                  </div>
-                  <div className="info-line">
-                    <div className="info-label">Prepared For</div>
-                    <div className="info-sep">:</div>
-                    <div className="info-value strong">{customerName || "-"}</div>
-                  </div>
-                  <div className="info-line info-line-address">
-                    <div className="info-label" />
-                    <div className="info-sep" />
-                    <div className="info-value">
-                      <div>{customerAddress || "-"}</div>
+                  <header className="sheet-head">
+                    <Image
+                      src="/assets/template-logo.png"
+                      alt="Company Logo"
+                      className="sheet-logo"
+                      width={175}
+                      height={58}
+                      priority
+                    />
+                    <div className="sheet-head-right">
+                      <h3 className="sheet-title">QUOTATION</h3>
+                      <table className="meta-table">
+                        <tbody>
+                          <tr>
+                            <td>Date</td>
+                            <td>:</td>
+                            <td>{quotationDate}</td>
+                          </tr>
+                          <tr>
+                            <td>Quotation No</td>
+                            <td>:</td>
+                            <td>{quotationNo}</td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
-                  </div>
-                  <div className="info-line info-line-attn">
-                    <div className="info-label">Attn</div>
-                    <div className="info-sep">:</div>
-                    <div className="info-value strong">
-                      {form.attn ? renderRichMultilineText(form.attn) : "-"}
+                  </header>
+                  <div className="sheet-divider" />
+                  <section className="company-block">
+                    <div>PT. Klimatek</div>
+                    <div>Jl. Tengsaw Kp. Babakan, Desa Tarikolot,</div>
+                    <div>RT. 003 RW. 005 Citeureup - Kab. Bogor</div>
+                    <div>Jawa Barat - Indonesia</div>
+                  </section>
+
+                  <section className="info-lines">
+                    <div className="info-line">
+                      <div className="info-label">Contact Person</div>
+                      <div className="info-sep">:</div>
+                      <div className="info-value">{preview.contactPerson || "-"}</div>
                     </div>
-                  </div>
-                </section>
+                    <div className="info-line">
+                      <div className="info-label">Prepared For</div>
+                      <div className="info-sep">:</div>
+                      <div className="info-value strong">{customerName || "-"}</div>
+                    </div>
+                    <div className="info-line info-line-address">
+                      <div className="info-label" />
+                      <div className="info-sep" />
+                      <div className="info-value">
+                        <div>{customerAddress || "-"}</div>
+                      </div>
+                    </div>
+                    <div className="info-line info-line-attn">
+                      <div className="info-label">Attn</div>
+                      <div className="info-sep">:</div>
+                      <div className="info-value strong">
+                        {form.attn ? renderRichMultilineText(form.attn) : "-"}
+                      </div>
+                    </div>
+                  </section>
 
-                <table className="item-grid">
-                  <thead>
-                    <tr>
-                      <th className="w-no">No</th>
-                      <th className="w-desc">Description</th>
-                      <th className="w-qty">QTY</th>
-                      <th className="w-price">Price</th>
-                      <th className="w-total">Total Price</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="item-row">
-                      <td>1</td>
-                      <td>{form.itemDescription ? renderRichMultilineText(form.itemDescription) : "-"}</td>
-                      <td>{numberFormatter.format(preview.quantity)}</td>
-                      <td>{currencyFormatter.format(preview.price)}</td>
-                      <td>{currencyFormatter.format(preview.subtotal)}</td>
-                    </tr>
-                    <tr className="summary-row summary-start">
-                      <td className="summary-empty" colSpan={2} rowSpan={4} />
-                      <td className="summary-label" colSpan={2}>Subtotal</td>
-                      <td className="summary-value">{currencyFormatter.format(preview.subtotal)}</td>
-                    </tr>
-                    <tr className="summary-row">
-                      <td className="summary-label" colSpan={2}>
-                        Discount ({(preview.discountRate * 100).toFixed(2)}%)
-                      </td>
-                      <td className="summary-value">{currencyFormatter.format(preview.discountAmount)}</td>
-                    </tr>
-                    <tr className="summary-row">
-                      <td className="summary-label" colSpan={2}>PPN {ppnPercent}%</td>
-                      <td className="summary-value">{currencyFormatter.format(preview.ppn)}</td>
-                    </tr>
-                    <tr className="summary-row strong">
-                      <td className="summary-label" colSpan={2}>Grand Total</td>
-                      <td className="summary-value">{currencyFormatter.format(preview.grandTotal)}</td>
-                    </tr>
-                  </tbody>
-                </table>
+                  <table className="item-grid">
+                    <thead>
+                      <tr>
+                        <th className="w-no">No</th>
+                        <th className="w-desc">Description</th>
+                        <th className="w-qty">QTY</th>
+                        <th className="w-price">Price</th>
+                        <th className="w-total">Total Price</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.items.map((item, index) => (
+                        <tr className="item-row" key={item.id}>
+                          <td>{index + 1}</td>
+                          <td>{item.description ? renderRichMultilineText(item.description) : "-"}</td>
+                          <td>{numberFormatter.format(item.quantity)}</td>
+                          <td>{currencyFormatter.format(item.price)}</td>
+                          <td>{currencyFormatter.format(item.total)}</td>
+                        </tr>
+                      ))}
+                      <tr className="summary-row summary-start">
+                        <td className="summary-empty" colSpan={2} rowSpan={4} />
+                        <td className="summary-label" colSpan={2}>Subtotal</td>
+                        <td className="summary-value">{currencyFormatter.format(preview.subtotal)}</td>
+                      </tr>
+                      <tr className="summary-row">
+                        <td className="summary-label" colSpan={2}>
+                          Discount ({(preview.discountRate * 100).toFixed(2)}%)
+                        </td>
+                        <td className="summary-value">{currencyFormatter.format(preview.discountAmount)}</td>
+                      </tr>
+                      <tr className="summary-row">
+                        <td className="summary-label" colSpan={2}>PPN {ppnPercent}%</td>
+                        <td className="summary-value">{currencyFormatter.format(preview.ppn)}</td>
+                      </tr>
+                      <tr className="summary-row strong">
+                        <td className="summary-label" colSpan={2}>Grand Total</td>
+                        <td className="summary-value">{currencyFormatter.format(preview.grandTotal)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
 
-                <section className="terms">
-                  <div className="terms-list plain-text">
-                    {form.additionalInformation.trim().length > 0
-                      ? renderRichMultilineText(form.additionalInformation)
-                      : "-"}
-                  </div>
-                </section>
+                  <section className="terms">
+                    <div className="terms-list plain-text">
+                      {form.additionalInformation.trim().length > 0
+                        ? renderRichMultilineText(form.additionalInformation)
+                        : "-"}
+                    </div>
+                  </section>
 
-                <footer className="sign-block">
-                  <div>Best Regards</div>
-                  <div className="sign-name">{accountName || "-"}</div>
-                  <div className="sign-company">PT Klimatek</div>
-                  <div className="sign-email">Email : {accountEmail || "-"}</div>
-                </footer>
+                  <footer className="sign-block">
+                    <div>Best Regards</div>
+                    <div className="sign-name">{accountName || "-"}</div>
+                    <div className="sign-company">PT Klimatek</div>
+                    <div className="sign-email">Email : {accountEmail || "-"}</div>
+                  </footer>
                 </article>
               </div>
             </div>
@@ -679,350 +665,71 @@ export default function QuotationPage() {
       </div>
 
       <style>{`
-        .quotation-grid {
-          display: grid;
-          width: 100%;
-          grid-template-columns: 1fr;
-          gap: 16px;
-          align-items: start;
-        }
-        .quotation-grid > * {
-          min-width: 0;
-        }
-        .quotation-page {
-          width: 100%;
-          padding-left: 20px;
-          padding-right: 20px;
-          overflow-x: hidden;
-        }
-        @media (min-width: 1024px) {
-          .quotation-page {
-            padding-left: 28px;
-            padding-right: 28px;
-          }
-        }
-        .quotation-panel {
-          border: 1px solid var(--rpb-border);
-          border-radius: 14px;
-          background: #fff;
-          padding: 20px;
-          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
-          min-width: 0;
-        }
-        .quotation-panel h1,
-        .quotation-panel h2,
-        .quotation-panel h3 {
-          margin: 0 0 12px;
-        }
-        .muted {
-          color: var(--rpb-ink-soft);
-          margin: 0 0 16px;
-          font-size: 13px;
-        }
-        .form-grid {
-          display: grid;
-          gap: 12px;
-        }
-        .auto-box {
-          border: 1px solid var(--rpb-border);
-          border-radius: 10px;
-          background: #f8fafc;
-          padding: 10px 12px;
-          display: grid;
-          gap: 8px;
-        }
-        .auto-row {
-          display: grid;
-          gap: 2px;
-        }
-        .auto-row span {
-          color: var(--rpb-ink-soft);
-          font-size: 12px;
-        }
-        .auto-row strong {
-          font-size: 14px;
-          white-space: pre-line;
-          word-break: break-word;
-        }
-        label {
-          display: grid;
-          gap: 6px;
-          font-size: 14px;
-        }
-        .field-toolbar {
-          display: flex;
-          justify-content: flex-end;
-          margin-top: -2px;
-          margin-bottom: 2px;
-        }
-        .text-style-btn {
-          width: 30px;
-          height: 28px;
-          font-weight: 800;
-          font-size: 14px;
-          line-height: 1;
-          cursor: pointer;
-        }
-        textarea {
-          resize: vertical;
-          min-height: 90px;
-        }
-        .item-box {
-          border: 1px solid var(--rpb-border);
-          border-radius: 10px;
-          padding: 12px;
-          margin: 0;
-          display: grid;
-          gap: 8px;
-        }
-        legend {
-          padding: 0 8px;
-          color: var(--rpb-ink-soft);
-          font-weight: 600;
-          font-size: 13px;
-        }
-        .actions {
-          display: flex;
-          gap: 10px;
-          justify-content: flex-end;
-          flex-wrap: wrap;
-        }
-        .action-btn {
-          padding: 10px 14px;
-          font-weight: 700;
-          cursor: pointer;
-        }
-        .error-box {
-          border: 1px solid #fecaca;
-          background: #fef2f2;
-          color: #b91c1c;
-          border-radius: 10px;
-          padding: 10px 12px;
-          font-size: 13px;
-          white-space: pre-wrap;
-        }
-        .a4-stage {
-          margin-top: 12px;
-          padding: 14px;
-          border: 1px solid var(--rpb-border);
-          border-radius: 10px;
-          background: #eef2f7;
-          overflow: hidden;
-          display: flex;
-          justify-content: center;
-        }
-        .a4-page-shell {
-          width: 100%;
-          min-width: 0;
-          display: flex;
-          justify-content: center;
-          align-items: flex-start;
-        }
-        .a4-page {
-          width: ${A4_WIDTH_PX}px;
-          min-height: ${A4_HEIGHT_PX}px;
-          box-sizing: border-box;
-          background: #fff;
-          color: #111;
-          font-family: Calibri, Arial, sans-serif;
-          font-size: 11px;
-          line-height: 1.2;
-          padding: 10mm;
-          box-shadow: 0 14px 24px rgba(15, 23, 42, 0.14);
-          transform-origin: top center;
-        }
-        .sheet-head {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-end;
-          gap: 12px;
-        }
-        .sheet-logo {
-          width: 175px;
-          max-width: 48%;
-          max-height: 58px;
-          object-fit: contain;
-        }
-        .sheet-head-right {
-          min-width: 0;
-          max-width: 52%;
-        }
-        .sheet-title {
-          font-size: 16px;
-          font-weight: 400;
-          margin: 0 0 2px;
-          text-align: right;
-        }
-        .meta-table {
-          width: auto;
-          margin-left: auto;
-          border-collapse: collapse;
-        }
-        .meta-table td {
-          border: none;
-          padding: 0 4px;
-          font-size: 10px;
-        }
-        .sheet-divider {
-          margin-top: 2px;
-          border-top: 1px solid #111;
-        }
-        .company-block {
-          margin-top: 4px;
-          margin-bottom: 10px;
-        }
-        .company-block div {
-          margin: 2px 0;
-        }
-        .info-lines {
-          margin: 10px 0 12px;
-        }
-        .info-line {
-          display: grid;
-          grid-template-columns: 120px 10px 1fr;
-          align-items: start;
-          column-gap: 3px;
-          margin: 2px 0;
-        }
-        .info-value {
-          white-space: pre-line;
-        }
-        .info-value.strong {
-          font-weight: 700;
-        }
-        .info-line-attn {
-          margin-top: 8px;
-        }
-        .item-grid {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 8px;
-          table-layout: fixed;
-        }
-        .item-grid th,
-        .item-grid td {
-          border: 1px solid #111;
-          padding: 2px 4px;
-          vertical-align: top;
-          overflow-wrap: anywhere;
-          word-break: break-word;
-        }
-        .item-grid th {
-          font-weight: 700;
-          text-align: center;
-        }
-        .item-grid .w-no {
-          width: 36px;
-        }
-        .item-grid .w-desc {
-          width: 52%;
-        }
-        .item-grid .w-qty {
-          width: 11%;
-        }
-        .item-grid .w-price {
-          width: 18%;
-        }
-        .item-grid .w-total {
-          width: 18%;
-        }
-        .item-grid .item-row td:nth-child(1) {
-          text-align: center;
-        }
-        .item-grid .item-row td:nth-child(2) {
-          white-space: pre-wrap;
-          tab-size: 4;
-          min-height: 180px;
-        }
-        .item-grid .item-row td:nth-child(3),
-        .item-grid .item-row td:nth-child(4),
-        .item-grid .item-row td:nth-child(5),
-        .summary-label,
-        .summary-value {
-          text-align: right;
-        }
-        .summary-label {
-          font-weight: 700;
-        }
-        .summary-empty {
-          border: none !important;
-          padding: 0;
-        }
-        .summary-row.strong .summary-label,
-        .summary-row.strong .summary-value {
-          font-weight: 700;
-        }
-        .terms {
-          margin-top: 6px;
-          font-size: 10px;
-        }
-        .terms-list > div {
-          margin: 3px 0;
-        }
-        .terms-list.plain-text {
-          white-space: pre-line;
-          line-height: 1.35;
-        }
-        .terms-title {
-          font-weight: 700;
-        }
-        .terms-title.mt {
-          margin-top: 10px;
-        }
-        .sign-block {
-          margin-top: 18px;
-          font-size: 10px;
-          white-space: pre-line;
-        }
-        .sign-block div {
-          margin: 2px 0;
-        }
-        .sign-name,
-        .sign-company,
-        .sign-email {
-          font-weight: 700;
-        }
-        .sign-name {
-          margin-top: 20px !important;
-        }
-
-        @media (min-width: 981px) {
-          .quotation-grid {
-            grid-template-columns: minmax(360px, 1fr) minmax(420px, 1.4fr);
-          }
-        }
-
+        .quotation-grid { display: grid; width: 100%; grid-template-columns: 1fr; gap: 16px; align-items: start; }
+        .quotation-grid > * { min-width: 0; }
+        .quotation-page { width: 100%; padding-left: 20px; padding-right: 20px; overflow-x: hidden; }
+        @media (min-width: 1024px) { .quotation-page { padding-left: 28px; padding-right: 28px; } }
+        .quotation-panel { border: 1px solid var(--rpb-border); border-radius: 14px; background: #fff; padding: 20px; box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08); min-width: 0; }
+        .quotation-panel h1, .quotation-panel h2, .quotation-panel h3 { margin: 0 0 12px; }
+        .muted { color: var(--rpb-ink-soft); margin: 0 0 16px; font-size: 13px; }
+        .form-grid { display: grid; gap: 12px; }
+        .auto-box { border: 1px solid var(--rpb-border); border-radius: 10px; background: #f8fafc; padding: 10px 12px; display: grid; gap: 8px; }
+        .auto-row { display: grid; gap: 2px; }
+        .auto-row span { color: var(--rpb-ink-soft); font-size: 12px; }
+        .auto-row strong { font-size: 14px; white-space: pre-line; word-break: break-word; }
+        label { display: grid; gap: 6px; font-size: 14px; }
+        .field-toolbar { display: flex; justify-content: flex-end; margin-top: -2px; margin-bottom: 2px; }
+        .text-style-btn { width: 30px; height: 28px; font-weight: 800; font-size: 14px; line-height: 1; cursor: pointer; }
+        textarea { resize: vertical; min-height: 90px; }
+        .item-box { border: 1px solid var(--rpb-border); border-radius: 10px; padding: 12px; margin: 0; display: grid; gap: 8px; }
+        legend { padding: 0 8px; color: var(--rpb-ink-soft); font-weight: 600; font-size: 13px; }
+        .actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+        .action-btn { padding: 10px 14px; font-weight: 700; cursor: pointer; }
+        .error-box { border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; border-radius: 10px; padding: 10px 12px; font-size: 13px; white-space: pre-wrap; }
+        .a4-stage { margin-top: 12px; padding: 14px; border: 1px solid var(--rpb-border); border-radius: 10px; background: #eef2f7; overflow: hidden; display: flex; justify-content: center; }
+        .a4-page-shell { width: 100%; min-width: 0; display: flex; justify-content: center; align-items: flex-start; }
+        .a4-page { width: ${A4_WIDTH_PX}px; min-height: ${A4_HEIGHT_PX}px; box-sizing: border-box; background: #fff; color: #111; font-family: Calibri, Arial, sans-serif; font-size: 11px; line-height: 1.2; padding: 10mm; box-shadow: 0 14px 24px rgba(15, 23, 42, 0.14); transform-origin: top center; }
+        .sheet-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+        .sheet-logo { width: 175px; max-width: 48%; max-height: 58px; object-fit: contain; }
+        .sheet-head-right { min-width: 0; max-width: 52%; }
+        .sheet-title { font-size: 16px; font-weight: 400; margin: 0 0 2px; text-align: right; }
+        .meta-table { width: auto; margin-left: auto; border-collapse: collapse; }
+        .meta-table td { border: none; padding: 0 4px; font-size: 10px; }
+        .sheet-divider { margin-top: 2px; border-top: 1px solid #111; }
+        .company-block { margin-top: 4px; margin-bottom: 10px; }
+        .company-block div { margin: 2px 0; }
+        .info-lines { margin: 10px 0 12px; }
+        .info-line { display: grid; grid-template-columns: 120px 10px 1fr; align-items: start; column-gap: 3px; margin: 2px 0; }
+        .info-value { white-space: pre-line; }
+        .info-value.strong { font-weight: 700; }
+        .info-line-attn { margin-top: 8px; }
+        .item-grid { width: 100%; border-collapse: collapse; margin-bottom: 8px; table-layout: fixed; }
+        .item-grid th, .item-grid td { border: 1px solid #111; padding: 2px 4px; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }
+        .item-grid th { font-weight: 700; text-align: center; }
+        .item-grid .w-no { width: 36px; }
+        .item-grid .w-desc { width: 52%; }
+        .item-grid .w-qty { width: 11%; }
+        .item-grid .w-price { width: 18%; }
+        .item-grid .w-total { width: 18%; }
+        .item-grid .item-row td:nth-child(1) { text-align: center; }
+        .item-grid .item-row td:nth-child(2) { white-space: pre-wrap; min-height: 60px; }
+        .item-grid .item-row td:nth-child(3), .item-grid .item-row td:nth-child(4), .item-grid .item-row td:nth-child(5), .summary-label, .summary-value { text-align: right; }
+        .summary-label { font-weight: 700; }
+        .summary-empty { border: none !important; padding: 0; }
+        .summary-row.strong .summary-label, .summary-row.strong .summary-value { font-weight: 700; }
+        .terms { margin-top: 6px; font-size: 10px; }
+        .terms-list.plain-text { white-space: pre-line; line-height: 1.35; }
+        .sign-block { margin-top: 18px; font-size: 10px; white-space: pre-line; }
+        .sign-block div { margin: 2px 0; }
+        .sign-name, .sign-company, .sign-email { font-weight: 700; }
+        .sign-name { margin-top: 20px !important; }
+        @media (min-width: 981px) { .quotation-grid { grid-template-columns: minmax(360px, 1fr) minmax(420px, 1.4fr); } }
         @media (max-width: 640px) {
-          .quotation-page {
-            padding-left: 12px;
-            padding-right: 12px;
-          }
-          .quotation-panel {
-            border-radius: 12px;
-            padding: 14px;
-          }
-          .actions {
-            justify-content: stretch;
-          }
-          .action-btn {
-            width: 100%;
-          }
-          .a4-stage {
-            padding: 8px;
-          }
-        }
-
-        @media (max-width: 375px) {
-          .quotation-page {
-            padding-left: 10px;
-            padding-right: 10px;
-          }
-          .quotation-panel {
-            padding: 12px;
-          }
-          .a4-stage {
-            padding: 6px;
-          }
+          .quotation-page { padding-left: 12px; padding-right: 12px; }
+          .quotation-panel { border-radius: 12px; padding: 14px; }
+          .actions { justify-content: stretch; }
+          .action-btn { width: 100%; }
+          .a4-stage { padding: 8px; }
         }
       `}</style>
     </RpbPageFrame>

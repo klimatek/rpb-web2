@@ -43,6 +43,19 @@ export interface CustomOtherItem {
   qty: number;
 }
 
+export interface AhuDraft {
+  id: string;
+  name: string;
+  dimensions: Dimensions;
+  panelThickness: PanelThickness;
+  selectedOther: Record<string, number>;
+  customOtherItems: CustomOtherItem[];
+  quotationDescription: string;
+  quotationQty: number;
+}
+
+export const MAX_AHU_PER_QUOTATION = 10;
+
 export interface SummaryLineItem {
   id: string;
   jenis: string;
@@ -99,10 +112,7 @@ export interface RpbDraftSnapshot {
   customerName: string;
   projectName: string;
   customerAddress: string;
-  dimensions: Dimensions;
-  panelThickness: PanelThickness;
-  selectedOther: Record<string, number>;
-  customOtherItems: CustomOtherItem[];
+  ahus: AhuDraft[];
   adjustments: AdjustmentValues;
 }
 

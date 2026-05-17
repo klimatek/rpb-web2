@@ -15,8 +15,8 @@ import {
 import { RpbPageFrame } from "@/components/layout/rpb-page-frame";
 import { useRpbMasterData } from "@/hooks/use-rpb-master-data";
 import { useRpbStore } from "@/store/rpb-store";
-import type { DimensionKey, OtherItem, StockCategory } from "@/types/rpb";
-import { ArrowRight, ChevronDown, ChevronUp, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
+import { MAX_AHU_PER_QUOTATION, type DimensionKey, type OtherItem, type StockCategory } from "@/types/rpb";
+import { ArrowRight, ChevronDown, ChevronUp, Pencil, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import type { FocusEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -120,10 +120,9 @@ export default function HomePage() {
   const customerName = useRpbStore((state) => state.customerName);
   const projectName = useRpbStore((state) => state.projectName);
   const customerAddress = useRpbStore((state) => state.customerAddress);
-  const dimensions = useRpbStore((state) => state.dimensions);
-  const panelThickness = useRpbStore((state) => state.panelThickness);
-  const selectedOther = useRpbStore((state) => state.selectedOther);
-  const customOtherItems = useRpbStore((state) => state.customOtherItems);
+  const ahus = useRpbStore((state) => state.ahus);
+  const activeAhuId = useRpbStore((state) => state.activeAhuId);
+  const activeAhu = useRpbStore((state) => state.getActiveAhu());
   const setCustomerName = useRpbStore((state) => state.setCustomerName);
   const setProjectName = useRpbStore((state) => state.setProjectName);
   const setCustomerAddress = useRpbStore((state) => state.setCustomerAddress);
@@ -131,6 +130,10 @@ export default function HomePage() {
   const setDimension = useRpbStore((state) => state.setDimension);
   const addOtherQty = useRpbStore((state) => state.addOtherQty);
   const addCustomOtherItem = useRpbStore((state) => state.addCustomOtherItem);
+  const addAhu = useRpbStore((state) => state.addAhu);
+  const removeAhu = useRpbStore((state) => state.removeAhu);
+  const setActiveAhu = useRpbStore((state) => state.setActiveAhu);
+  const renameAhu = useRpbStore((state) => state.renameAhu);
   const getSnapshot = useRpbStore((state) => state.getSnapshot);
   const loadSnapshot = useRpbStore((state) => state.loadSnapshot);
 
@@ -152,15 +155,21 @@ export default function HomePage() {
   );
   const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
   const [customErrors, setCustomErrors] = useState<{ jenis?: string; keterangan?: string; satuan?: string; jenisSpec?: string; harga?: string; qty?: string }>({});
-  const [onboardVisible, setOnboardVisible] = useState(false);
-  const [onboardLoaded, setOnboardLoaded] = useState(false);
+  const [onboardVisible, setOnboardVisible] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOnboardVisible(localStorage.getItem("rpb-onboard-done") !== "1");
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOnboardLoaded(true);
-  }, []);
+    return localStorage.getItem("rpb-onboard-done") !== "1";
+  });
+  const [renamingAhuId, setRenamingAhuId] = useState<string | null>(null);
+  const [renamingAhuValue, setRenamingAhuValue] = useState("");
+
+  const dimensions = activeAhu.dimensions;
+  const panelThickness = activeAhu.panelThickness;
+  const selectedOther = activeAhu.selectedOther;
+  const customOtherItems = activeAhu.customOtherItems;
+
   const hideOnboard = () => {
     localStorage.setItem("rpb-onboard-done", "1");
     setOnboardVisible(false);
@@ -225,35 +234,29 @@ export default function HomePage() {
   useEffect(() => {
     const snapshot = getSnapshot();
     saveLatestDraft(snapshot);
-  }, [
-    customerAddress,
-    customerName,
-    customOtherItems,
-    dimensions,
-    getSnapshot,
-    panelThickness,
-    projectName,
-    selectedOther,
-  ]);
+  }, [ahus, customerAddress, customerName, getSnapshot, projectName]);
 
   useEffect(() => {
     const handler = (event: BeforeUnloadEvent) => {
+      const defaultAhu = ahus[0];
       const empty =
         !customerName.trim() &&
         !projectName.trim() &&
         !customerAddress.trim() &&
-        dimensions.length === 3550 &&
-        dimensions.width === 1100 &&
-        dimensions.height === 950 &&
-        Object.keys(selectedOther).length === 0 &&
-        customOtherItems.length === 0;
+        ahus.length === 1 &&
+        defaultAhu?.dimensions.length === 3550 &&
+        defaultAhu?.dimensions.width === 1100 &&
+        defaultAhu?.dimensions.height === 950 &&
+        defaultAhu?.panelThickness === 30 &&
+        Object.keys(defaultAhu?.selectedOther ?? {}).length === 0 &&
+        (defaultAhu?.customOtherItems.length ?? 0) === 0;
       if (empty) return;
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
-  }, [customerAddress, customerName, customOtherItems.length, dimensions, selectedOther, projectName]);
+  }, [ahus, customerAddress, customerName, projectName]);
 
   const latestDraftLabel = useMemo(() => {
     if (!latestDraft) {
@@ -287,6 +290,44 @@ export default function HomePage() {
     clearLatestDraft();
     setLatestDraft(null);
     setDraftBannerDismissed(true);
+  };
+
+  const beginRenameAhu = (ahuId: string, name: string) => {
+    setRenamingAhuId(ahuId);
+    setRenamingAhuValue(name);
+  };
+
+  const commitRenameAhu = () => {
+    if (!renamingAhuId) {
+      return;
+    }
+
+    renameAhu(renamingAhuId, renamingAhuValue);
+    setRenamingAhuId(null);
+    setRenamingAhuValue("");
+  };
+
+  const handleRemoveAhu = (ahuId: string) => {
+    if (ahus.length <= 1) {
+      return;
+    }
+
+    const targetAhu = ahus.find((ahu) => ahu.id === ahuId);
+    const hasMeaningfulData = Boolean(
+      targetAhu &&
+        (targetAhu.dimensions.length !== 3550 ||
+          targetAhu.dimensions.width !== 1100 ||
+          targetAhu.dimensions.height !== 950 ||
+          targetAhu.panelThickness !== 30 ||
+          Object.keys(targetAhu.selectedOther).length > 0 ||
+          targetAhu.customOtherItems.length > 0),
+    );
+
+    if (hasMeaningfulData && !window.confirm(`Hapus ${targetAhu?.name ?? "AHU"}?`)) {
+      return;
+    }
+
+    removeAhu(ahuId);
   };
 
   const openAddModal = (item: OtherItem) => {
@@ -385,7 +426,7 @@ export default function HomePage() {
               </button>
             </div>
           ) : null}
-          {onboardLoaded && onboardVisible ? (
+          {onboardVisible ? (
             <div className="rpb-onboarding-banner rounded-xl border border-rpb-border bg-white px-4 py-3 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
@@ -471,8 +512,93 @@ export default function HomePage() {
             </label>
           </div>
 
+          <section className="rpb-section p-4 md:p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="rpb-h-title text-base font-semibold md:text-lg">Daftar AHU</h2>
+                <p className="text-xs text-rpb-ink-soft">
+                  Tambah AHU baru akan menyalin data teknis dari AHU aktif.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rpb-btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+                onClick={addAhu}
+                disabled={ahus.length >= MAX_AHU_PER_QUOTATION}
+              >
+                <Plus size={15} />
+                Tambah AHU
+              </button>
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {ahus.map((ahu, index) => {
+                const isActive = ahu.id === activeAhuId;
+
+                return (
+                  <div
+                    key={ahu.id}
+                    className={`min-w-[180px] rounded-xl border px-3 py-2 ${
+                      isActive ? "border-rpb-primary bg-[#eef2ff]" : "border-rpb-border bg-white"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      className="w-full text-left"
+                      onClick={() => setActiveAhu(ahu.id)}
+                    >
+                      <p className="text-xs text-rpb-ink-soft">AHU {index + 1}</p>
+                      {renamingAhuId === ahu.id ? (
+                        <input
+                          className="rpb-input mt-1 h-9"
+                          value={renamingAhuValue}
+                          onChange={(event) => setRenamingAhuValue(event.target.value)}
+                          onBlur={commitRenameAhu}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              commitRenameAhu();
+                            }
+                            if (event.key === "Escape") {
+                              setRenamingAhuId(null);
+                              setRenamingAhuValue("");
+                            }
+                          }}
+                          autoFocus
+                        />
+                      ) : (
+                        <p className="mt-0.5 font-semibold text-foreground">{ahu.name}</p>
+                      )}
+                    </button>
+
+                    <div className="mt-2 flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        className="rpb-btn-ghost inline-flex h-9 w-9 items-center justify-center"
+                        onClick={() => beginRenameAhu(ahu.id, ahu.name)}
+                        aria-label={`Rename ${ahu.name}`}
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className="rpb-btn-ghost inline-flex h-9 w-9 items-center justify-center text-red-700"
+                        onClick={() => handleRemoveAhu(ahu.id)}
+                        disabled={ahus.length === 1}
+                        aria-label={`Hapus ${ahu.name}`}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
           <div>
-            <h2 className="rpb-h-title mb-2 text-base font-semibold md:text-lg">Ukuran Ruangan</h2>
+            <h2 className="rpb-h-title mb-2 text-base font-semibold md:text-lg">
+              Ukuran Ruangan {activeAhu.name}
+            </h2>
             <div className="grid gap-3 md:grid-cols-3">
               <DimensionInput
                 label="Panjang (mm)"
