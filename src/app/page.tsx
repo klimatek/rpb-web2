@@ -514,12 +514,7 @@ export default function HomePage() {
 
           <section className="rpb-section p-4 md:p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h2 className="rpb-h-title text-base font-semibold md:text-lg">Daftar AHU</h2>
-                <p className="text-xs text-rpb-ink-soft">
-                  Tambah AHU baru akan menyalin data teknis dari AHU aktif.
-                </p>
-              </div>
+              <h2 className="rpb-h-title text-base font-semibold md:text-lg">Daftar AHU</h2>
               <button
                 type="button"
                 className="rpb-btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold"
@@ -531,20 +526,24 @@ export default function HomePage() {
               </button>
             </div>
 
-            <div className="flex gap-2 overflow-x-auto pb-1">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {ahus.map((ahu, index) => {
                 const isActive = ahu.id === activeAhuId;
 
                 return (
                   <div
                     key={ahu.id}
-                    className={`min-w-[180px] rounded-xl border px-3 py-2 ${
+                    className={`rounded-xl border p-2 ${
                       isActive ? "border-rpb-primary bg-[#eef2ff]" : "border-rpb-border bg-white"
                     }`}
                   >
                     <button
                       type="button"
-                      className="w-full text-left"
+                      className={`w-full rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rpb-primary/40 ${
+                        isActive
+                          ? "border-rpb-primary bg-white"
+                          : "border-rpb-border/70 bg-white hover:border-rpb-primary/60 hover:bg-[#f8f9ff]"
+                      }`}
                       onClick={() => setActiveAhu(ahu.id)}
                     >
                       <p className="text-xs text-rpb-ink-soft">AHU {index + 1}</p>
