@@ -48,6 +48,7 @@ export interface AhuDraft {
   name: string;
   dimensions: Dimensions;
   panelThickness: PanelThickness;
+  adjustments: AdjustmentValues;
   selectedOther: Record<string, number>;
   customOtherItems: CustomOtherItem[];
   quotationDescription: string;

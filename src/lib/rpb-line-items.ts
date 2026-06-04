@@ -110,18 +110,39 @@ export const computeAhuGrandTotal = (params: {
   subtotalIdr: number;
   adjustments: AdjustmentValues;
 }): number => {
+  const breakdown = computeAhuAdjustmentBreakdown(params);
+  return breakdown.grandTotalIdr;
+};
+
+export const computeAhuAdjustmentBreakdown = (params: {
+  subtotalIdr: number;
+  adjustments: AdjustmentValues;
+}): {
+  stockReturnIdr: number;
+  marketingCostIdr: number;
+  servicesIdr: number;
+  profitIdr: number;
+  grandTotalIdr: number;
+} => {
   const stockReturnIdr = pctToValue(params.subtotalIdr, params.adjustments.stockReturn);
   const marketingCostIdr = pctToValue(params.subtotalIdr, params.adjustments.marketingCost);
   const servicesIdr = pctToValue(params.subtotalIdr, params.adjustments.services);
   const baseAfterAdjustIdr =
     params.subtotalIdr + stockReturnIdr + marketingCostIdr + servicesIdr;
   const profitIdr = pctToValue(baseAfterAdjustIdr, params.adjustments.profit);
-  return baseAfterAdjustIdr + profitIdr;
+  const grandTotalIdr = baseAfterAdjustIdr + profitIdr;
+
+  return {
+    stockReturnIdr,
+    marketingCostIdr,
+    servicesIdr,
+    profitIdr,
+    grandTotalIdr,
+  };
 };
 
 export const buildAhuSummaries = (params: {
   ahus: AhuDraft[];
-  adjustments: AdjustmentValues;
   profileItems: ProfileMasterItem[];
   konstruksiItems: KonstruksiMasterItem[];
   otherItems: OtherItem[];
@@ -134,6 +155,10 @@ export const buildAhuSummaries = (params: {
       otherItems: params.otherItems,
     });
     const subtotalIdr = lineItems.reduce((sum, item) => sum + item.hargaIdr * item.qty, 0);
+    const adjustmentBreakdown = computeAhuAdjustmentBreakdown({
+      subtotalIdr,
+      adjustments: ahu.adjustments,
+    });
 
     return {
       ahu,
@@ -141,20 +166,16 @@ export const buildAhuSummaries = (params: {
       profileIdr,
       konstruksiIdr,
       subtotalIdr,
-      grandTotalIdr: computeAhuGrandTotal({
-        subtotalIdr,
-        adjustments: params.adjustments,
-      }),
+      ...adjustmentBreakdown,
     };
   });
 
   const subtotalIdr = ahuSummaries.reduce((sum, item) => sum + item.subtotalIdr, 0);
-  const stockReturnIdr = pctToValue(subtotalIdr, params.adjustments.stockReturn);
-  const marketingCostIdr = pctToValue(subtotalIdr, params.adjustments.marketingCost);
-  const servicesIdr = pctToValue(subtotalIdr, params.adjustments.services);
-  const baseAfterAdjustIdr = subtotalIdr + stockReturnIdr + marketingCostIdr + servicesIdr;
-  const profitIdr = pctToValue(baseAfterAdjustIdr, params.adjustments.profit);
-  const grandTotalIdr = baseAfterAdjustIdr + profitIdr;
+  const stockReturnIdr = ahuSummaries.reduce((sum, item) => sum + item.stockReturnIdr, 0);
+  const marketingCostIdr = ahuSummaries.reduce((sum, item) => sum + item.marketingCostIdr, 0);
+  const servicesIdr = ahuSummaries.reduce((sum, item) => sum + item.servicesIdr, 0);
+  const profitIdr = ahuSummaries.reduce((sum, item) => sum + item.profitIdr, 0);
+  const grandTotalIdr = ahuSummaries.reduce((sum, item) => sum + item.grandTotalIdr, 0);
 
   return {
     ahuSummaries,

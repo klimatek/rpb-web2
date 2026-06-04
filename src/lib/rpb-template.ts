@@ -1,4 +1,5 @@
 import type {
+  AdjustmentValues,
   AhuDraft,
   CustomOtherItem,
   QuotationContent,
@@ -19,6 +20,12 @@ const DEFAULT_DIMENSIONS = {
 } as const;
 const DEFAULT_PANEL_THICKNESS = 30;
 const DEFAULT_QUOTATION_QTY = 1;
+const DEFAULT_ADJUSTMENTS: AdjustmentValues = {
+  stockReturn: 3,
+  marketingCost: 3,
+  services: 3,
+  profit: 25,
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -48,6 +55,20 @@ const toNonNegativeNumber = (value: unknown, fallback = 0): number =>
 const toPercent = (value: unknown): number => Math.min(100, toNonNegativeNumber(value));
 
 const toQty = (value: unknown): number => Math.floor(toNonNegativeNumber(value));
+
+const normalizeAdjustments = (
+  value: unknown,
+  fallback: AdjustmentValues = DEFAULT_ADJUSTMENTS,
+): AdjustmentValues => {
+  const source = isRecord(value) ? value : {};
+
+  return {
+    stockReturn: toPercent(source.stockReturn ?? fallback.stockReturn),
+    marketingCost: toPercent(source.marketingCost ?? fallback.marketingCost),
+    services: toPercent(source.services ?? fallback.services),
+    profit: toPercent(source.profit ?? fallback.profit),
+  };
+};
 
 const sanitizeCustomId = (value: unknown, index: number): string => {
   const raw = typeof value === "string" ? value.trim() : "";
@@ -115,7 +136,11 @@ const normalizeQuotationQty = (value: unknown): number => {
   return qty > 0 ? qty : DEFAULT_QUOTATION_QTY;
 };
 
-const normalizeSingleAhuDraft = (value: unknown, index: number): AhuDraft | null => {
+const normalizeSingleAhuDraft = (
+  value: unknown,
+  index: number,
+  fallbackAdjustments: AdjustmentValues,
+): AhuDraft | null => {
   if (!isRecord(value)) {
     return null;
   }
@@ -132,6 +157,7 @@ const normalizeSingleAhuDraft = (value: unknown, index: number): AhuDraft | null
       height: toNonNegativeNumber(dimensions.height, DEFAULT_DIMENSIONS.height),
     },
     panelThickness: value.panelThickness === 45 ? 45 : DEFAULT_PANEL_THICKNESS,
+    adjustments: normalizeAdjustments(value.adjustments, fallbackAdjustments),
     selectedOther: normalizeSelectedOther(value.selectedOther),
     customOtherItems: normalizeCustomOtherItems(value.customOtherItems),
     quotationDescription: normalizeQuotationDescription(value.quotationDescription, name),
@@ -139,14 +165,18 @@ const normalizeSingleAhuDraft = (value: unknown, index: number): AhuDraft | null
   };
 };
 
-const normalizeAhus = (value: unknown, projectName: string): AhuDraft[] => {
+const normalizeAhus = (
+  value: unknown,
+  projectName: string,
+  fallbackAdjustments: AdjustmentValues,
+): AhuDraft[] => {
   if (!Array.isArray(value)) {
     return [];
   }
 
   return value
     .slice(0, MAX_AHU_PER_QUOTATION)
-    .map((ahu, index) => normalizeSingleAhuDraft(ahu, index))
+    .map((ahu, index) => normalizeSingleAhuDraft(ahu, index, fallbackAdjustments))
     .filter((ahu): ahu is AhuDraft => ahu !== null)
     .map((ahu, index) => ({
       ...ahu,
@@ -157,7 +187,11 @@ const normalizeAhus = (value: unknown, projectName: string): AhuDraft[] => {
     }));
 };
 
-const buildLegacySingleAhu = (value: Record<string, unknown>, projectName: string): AhuDraft => {
+const buildLegacySingleAhu = (
+  value: Record<string, unknown>,
+  projectName: string,
+  fallbackAdjustments: AdjustmentValues,
+): AhuDraft => {
   const dimensions = isRecord(value.dimensions) ? value.dimensions : {};
   const name = "AHU 1";
 
@@ -170,6 +204,7 @@ const buildLegacySingleAhu = (value: Record<string, unknown>, projectName: strin
       height: toNonNegativeNumber(dimensions.height, DEFAULT_DIMENSIONS.height),
     },
     panelThickness: value.panelThickness === 45 ? 45 : DEFAULT_PANEL_THICKNESS,
+    adjustments: fallbackAdjustments,
     selectedOther: normalizeSelectedOther(value.selectedOther),
     customOtherItems: normalizeCustomOtherItems(value.customOtherItems),
     quotationDescription: projectName || name,
@@ -209,9 +244,9 @@ export const normalizeRpbDraftSnapshot = (value: unknown): RpbDraftSnapshot => {
   }
 
   const dimensions = isRecord(value.dimensions) ? value.dimensions : {};
-  const adjustments = isRecord(value.adjustments) ? value.adjustments : {};
+  const adjustments = normalizeAdjustments(value.adjustments);
   const projectName = normalizeText(value.projectName, "", 180);
-  const ahus = normalizeAhus(value.ahus, projectName);
+  const ahus = normalizeAhus(value.ahus, projectName, adjustments);
   const normalizedAhus =
     ahus.length > 0
       ? ahus
@@ -224,6 +259,7 @@ export const normalizeRpbDraftSnapshot = (value: unknown): RpbDraftSnapshot => {
               customOtherItems: value.customOtherItems,
             },
             projectName,
+            adjustments,
           ),
         ];
 
@@ -232,12 +268,7 @@ export const normalizeRpbDraftSnapshot = (value: unknown): RpbDraftSnapshot => {
     projectName,
     customerAddress: normalizeText(value.customerAddress, "", 240),
     ahus: normalizedAhus,
-    adjustments: {
-      stockReturn: toPercent(adjustments.stockReturn),
-      marketingCost: toPercent(adjustments.marketingCost),
-      services: toPercent(adjustments.services),
-      profit: toPercent(adjustments.profit),
-    },
+    adjustments,
   };
 
   const quotationContent = normalizeQuotationContent(value.quotationContent);

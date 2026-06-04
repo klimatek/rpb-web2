@@ -30,6 +30,7 @@ import type { RowInput } from "jspdf-autotable";
 import Link from "next/link";
 import type { FocusEvent, FormEvent } from "react";
 import { useMemo, useState } from "react";
+import type { AdjustmentKey } from "@/types/rpb";
 
 const normalizeNumericInput = (value: string): string => {
   const normalizedDot = value.replace(",", ".");
@@ -72,6 +73,48 @@ interface CalculationRow {
   highlight?: boolean;
 }
 
+const ADJUSTMENT_INPUTS: Array<{ key: AdjustmentKey; label: string }> = [
+  { key: "stockReturn", label: "Stock Return" },
+  { key: "marketingCost", label: "Marketing Cost" },
+  { key: "services", label: "Services" },
+  { key: "profit", label: "Profit" },
+];
+
+const formatAdjustmentLabel = (label: string, value: number): string => `${label} (${value}%)`;
+
+const buildAhuCalculationRows = (summary: {
+  ahu: { adjustments: Record<AdjustmentKey, number> };
+  subtotalIdr: number;
+  stockReturnIdr: number;
+  marketingCostIdr: number;
+  servicesIdr: number;
+  profitIdr: number;
+  grandTotalIdr: number;
+}): CalculationRow[] => [
+  { key: "subtotal", label: "Subtotal AHU", value: summary.subtotalIdr },
+  {
+    key: "stock",
+    label: formatAdjustmentLabel("Stock Return", summary.ahu.adjustments.stockReturn),
+    value: summary.stockReturnIdr,
+  },
+  {
+    key: "marketing",
+    label: formatAdjustmentLabel("Marketing Cost", summary.ahu.adjustments.marketingCost),
+    value: summary.marketingCostIdr,
+  },
+  {
+    key: "services",
+    label: formatAdjustmentLabel("Services", summary.ahu.adjustments.services),
+    value: summary.servicesIdr,
+  },
+  {
+    key: "profit",
+    label: formatAdjustmentLabel("Profit", summary.ahu.adjustments.profit),
+    value: summary.profitIdr,
+  },
+  { key: "grand", label: "Grand Total AHU", value: summary.grandTotalIdr, highlight: true },
+];
+
 const toTitleCase = (value: string): string =>
   value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 
@@ -83,10 +126,9 @@ export default function SummaryPage() {
   const projectName = useRpbStore((state) => state.projectName);
   const customerAddress = useRpbStore((state) => state.customerAddress);
   const ahus = useRpbStore((state) => state.ahus);
-  const adjustments = useRpbStore((state) => state.adjustments);
   const setAhuOtherQty = useRpbStore((state) => state.setAhuOtherQty);
   const setAhuCustomOtherItemQty = useRpbStore((state) => state.setAhuCustomOtherItemQty);
-  const setAdjustment = useRpbStore((state) => state.setAdjustment);
+  const setAhuAdjustment = useRpbStore((state) => state.setAhuAdjustment);
   const getSnapshot = useRpbStore((state) => state.getSnapshot);
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -98,24 +140,19 @@ export default function SummaryPage() {
     () =>
       buildAhuSummaries({
         ahus,
-        adjustments,
         profileItems: masterData?.profileItems ?? [],
         konstruksiItems: masterData?.konstruksiItems ?? [],
         otherItems: masterData?.otherItems ?? [],
       }),
-    [adjustments, ahus, masterData?.konstruksiItems, masterData?.otherItems, masterData?.profileItems],
+    [ahus, masterData?.konstruksiItems, masterData?.otherItems, masterData?.profileItems],
   );
 
   const calculationRows: CalculationRow[] = [
     { key: "subtotal", label: "Subtotal", value: totals.subtotalIdr },
-    { key: "stock", label: `Stock Return (${adjustments.stockReturn}%)`, value: totals.stockReturnIdr },
-    {
-      key: "marketing",
-      label: `Marketing Cost (${adjustments.marketingCost}%)`,
-      value: totals.marketingCostIdr,
-    },
-    { key: "services", label: `Services (${adjustments.services}%)`, value: totals.servicesIdr },
-    { key: "profit", label: `Profit (${adjustments.profit}%)`, value: totals.profitIdr },
+    { key: "stock", label: "Stock Return", value: totals.stockReturnIdr },
+    { key: "marketing", label: "Marketing Cost", value: totals.marketingCostIdr },
+    { key: "services", label: "Services", value: totals.servicesIdr },
+    { key: "profit", label: "Profit", value: totals.profitIdr },
     { key: "grand", label: "GRAND TOTAL", value: totals.grandTotalIdr, highlight: true },
   ];
 
@@ -254,7 +291,7 @@ export default function SummaryPage() {
 
     const tableHead = [["No", "Jenis", "Keterangan", "Satuan", "Jenis Spec", "Qty", "Harga", "Total"]];
     const tableBody: RowInput[] = [];
-    const pdfBodyRowKinds: Array<"ahu" | "main-even" | "main-odd" | "detail"> = [];
+    const pdfBodyRowKinds: Array<"ahu" | "main-even" | "main-odd" | "detail" | "adjust"> = [];
     let globalIndex = 1;
 
     ahuSummaries.forEach((summary, ahuIndex) => {
@@ -299,6 +336,43 @@ export default function SummaryPage() {
           ]);
           pdfBodyRowKinds.push("detail");
         });
+      });
+
+      buildAhuCalculationRows(summary).forEach((row) => {
+        tableBody.push([
+          {
+            content: "",
+            colSpan: 6,
+            styles: {
+              fillColor: row.highlight ? [46, 49, 146] : [245, 251, 255],
+              lineColor: [217, 219, 239],
+              lineWidth: 0.15,
+            },
+          },
+          {
+            content: row.label,
+            styles: {
+              fillColor: row.highlight ? [46, 49, 146] : [245, 251, 255],
+              textColor: row.highlight ? [255, 255, 255] : [75, 82, 122],
+              halign: "right",
+              fontStyle: row.highlight ? "bold" : "normal",
+              lineColor: [217, 219, 239],
+              lineWidth: 0.15,
+            },
+          },
+          {
+            content: formatRupiah(row.value),
+            styles: {
+              fillColor: row.highlight ? [46, 49, 146] : [245, 251, 255],
+              textColor: row.highlight ? [255, 255, 255] : [31, 35, 64],
+              halign: "right",
+              fontStyle: "bold",
+              lineColor: [217, 219, 239],
+              lineWidth: 0.15,
+            },
+          },
+        ]);
+        pdfBodyRowKinds.push("adjust");
       });
     });
 
@@ -389,6 +463,9 @@ export default function SummaryPage() {
             data.cell.styles.fontSize = 7.8;
             data.cell.styles.textColor = [75, 82, 122];
           }
+          if (kind === "adjust") {
+            data.cell.styles.fontSize = 8;
+          }
         }
       },
     });
@@ -443,72 +520,10 @@ export default function SummaryPage() {
         ) : null}
         {saveMessage ? <div className="rpb-alert rpb-alert-info">{saveMessage}</div> : null}
 
-        <section className="rpb-section p-4 md:p-4">
-          <div className="grid gap-2 md:grid-cols-4">
-            <label className="flex flex-col gap-2 text-sm font-semibold text-rpb-ink-soft">
-              Stock Return (%)
-              <input
-                className="rpb-input"
-                type="number"
-                min={0}
-                max={100}
-                step="any"
-                value={adjustments.stockReturn}
-                onFocus={selectInputOnFocus}
-                onChange={(event) =>
-                  setAdjustment("stockReturn", parsePercentInput(event.target.value))
-                }
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-rpb-ink-soft">
-              Marketing Cost (%)
-              <input
-                className="rpb-input"
-                type="number"
-                min={0}
-                max={100}
-                step="any"
-                value={adjustments.marketingCost}
-                onFocus={selectInputOnFocus}
-                onChange={(event) =>
-                  setAdjustment("marketingCost", parsePercentInput(event.target.value))
-                }
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-rpb-ink-soft">
-              Services (%)
-              <input
-                className="rpb-input"
-                type="number"
-                min={0}
-                max={100}
-                step="any"
-                value={adjustments.services}
-                onFocus={selectInputOnFocus}
-                onChange={(event) =>
-                  setAdjustment("services", parsePercentInput(event.target.value))
-                }
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-rpb-ink-soft">
-              Profit (%)
-              <input
-                className="rpb-input"
-                type="number"
-                min={0}
-                max={100}
-                step="any"
-                value={adjustments.profit}
-                onFocus={selectInputOnFocus}
-                onChange={(event) => setAdjustment("profit", parsePercentInput(event.target.value))}
-              />
-            </label>
-          </div>
-        </section>
-
         <section className="space-y-3">
           {ahuSummaries.map((summary, ahuIndex) => {
             const isOpen = openAhuIds.includes(summary.ahu.id);
+            const ahuCalculationRows = buildAhuCalculationRows(summary);
 
             return (
               <article key={summary.ahu.id} className="rpb-section p-3 md:p-4">
@@ -522,12 +537,42 @@ export default function SummaryPage() {
                     <p className="text-xs text-rpb-ink-soft">
                       Subtotal AHU: {formatRupiah(summary.subtotalIdr)}
                     </p>
+                    <p className="text-xs font-semibold text-rpb-primary">
+                      Grand Total AHU: {formatRupiah(summary.grandTotalIdr)}
+                    </p>
                   </div>
                   {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                 </button>
 
                 {isOpen ? (
                   <div className="mt-3">
+                    <div className="mb-3 grid gap-2 md:grid-cols-4">
+                      {ADJUSTMENT_INPUTS.map((input) => (
+                        <label
+                          key={input.key}
+                          className="flex flex-col gap-2 text-sm font-semibold text-rpb-ink-soft"
+                        >
+                          {input.label} (%)
+                          <input
+                            className="rpb-input"
+                            type="number"
+                            min={0}
+                            max={100}
+                            step="any"
+                            value={summary.ahu.adjustments[input.key]}
+                            onFocus={selectInputOnFocus}
+                            onChange={(event) =>
+                              setAhuAdjustment(
+                                summary.ahu.id,
+                                input.key,
+                                parsePercentInput(event.target.value),
+                              )
+                            }
+                          />
+                        </label>
+                      ))}
+                    </div>
+
                     <div className="hidden lg:block">
                       <table className="rpb-table w-full text-sm" style={{ tableLayout: "fixed" }}>
                         <thead>
@@ -616,13 +661,25 @@ export default function SummaryPage() {
                           })}
                         </tbody>
                         <tfoot>
-                          <tr>
-                            <td colSpan={6} className="bg-[#eceef8]" />
-                            <td className="bg-[#eceef8] text-right text-rpb-ink-soft">Subtotal AHU</td>
-                            <td className="bg-[#eceef8] text-right font-semibold">
-                              {formatRupiah(summary.subtotalIdr)}
-                            </td>
-                          </tr>
+                          {ahuCalculationRows.map((row) => (
+                            <tr key={row.key}>
+                              <td colSpan={6} className={row.highlight ? "bg-[#373d77]" : "bg-[#eceef8]"} />
+                              <td
+                                className={`text-right ${
+                                  row.highlight ? "bg-[#373d77] font-bold text-white" : "bg-[#eceef8] text-rpb-ink-soft"
+                                }`}
+                              >
+                                {row.label}
+                              </td>
+                              <td
+                                className={`text-right font-semibold ${
+                                  row.highlight ? "bg-[#373d77] text-white" : "bg-[#eceef8]"
+                                }`}
+                              >
+                                {formatRupiah(row.value)}
+                              </td>
+                            </tr>
+                          ))}
                         </tfoot>
                       </table>
                     </div>
@@ -685,6 +742,25 @@ export default function SummaryPage() {
                           </article>
                         );
                       })}
+                      <div className="overflow-hidden rounded-md border border-rpb-border bg-white">
+                        <div className="divide-y divide-rpb-border">
+                          {ahuCalculationRows.map((row) => (
+                            <div
+                              key={row.key}
+                              className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-2.5 py-2 text-xs ${
+                                row.highlight ? "bg-[#373d77]" : "bg-[#eceef8]"
+                              }`}
+                            >
+                              <p className={row.highlight ? "font-bold text-white" : "text-rpb-ink-soft"}>
+                                {row.label}
+                              </p>
+                              <p className={row.highlight ? "font-bold text-white" : "font-semibold text-foreground"}>
+                                {formatRupiah(row.value)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ) : null}

@@ -11,8 +11,10 @@ import {
 } from "@/lib/rpb-latest-draft";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useRpbStore } from "@/store/rpb-store";
+import { Download, FileSpreadsheet, Save } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import type { RowInput } from "jspdf-autotable";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const numberFormatter = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
@@ -45,6 +47,52 @@ function toQuotationMarkupFactor(discountRate: number): number {
   const denominator = 1 - safeDiscountRate;
   if (denominator <= 0) return 1;
   return 1 / denominator;
+}
+
+function sanitizeFilePart(value: string): string {
+  return String(value ?? "")
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80);
+}
+
+function buildQuotationFileName(quotationNo: string, preparedFor: string, extension: "pdf" | "xlsx"): string {
+  const safeQuotationNo = sanitizeFilePart(quotationNo) || "quotation";
+  const safePreparedFor = sanitizeFilePart(preparedFor) || "customer";
+  return `${safeQuotationNo}-${safePreparedFor}.${extension}`;
+}
+
+function cleanPdfText(value: string): string {
+  return String(value ?? "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\u00A0/g, " ")
+    .trim();
+}
+
+function formatPdfCurrency(value: number): string {
+  return currencyFormatter.format(value).replace(/\u00A0/g, " ");
+}
+
+function loadImageAsDataUrl(src: string): Promise<string> {
+  return fetch(src)
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error("Gagal memuat logo quotation.");
+      }
+      return response.blob();
+    })
+    .then(
+      (blob) =>
+        new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(new Error("Gagal membaca logo quotation."));
+          reader.readAsDataURL(blob);
+        }),
+    );
 }
 
 function renderBoldInline(text: string) {
@@ -80,7 +128,6 @@ export default function QuotationPage() {
   const projectName = useRpbStore((state) => state.projectName);
   const customerAddress = useRpbStore((state) => state.customerAddress);
   const ahus = useRpbStore((state) => state.ahus);
-  const adjustments = useRpbStore((state) => state.adjustments);
   const setAhuQuotationDescription = useRpbStore((state) => state.setAhuQuotationDescription);
   const setAhuQuotationQty = useRpbStore((state) => state.setAhuQuotationQty);
   const quotationContent = useRpbStore((state) => state.quotationContent);
@@ -95,11 +142,13 @@ export default function QuotationPage() {
   const descriptionRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   const [busy, setBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
   const a4ShellRef = useRef<HTMLDivElement>(null);
+  const a4PageRef = useRef<HTMLElement>(null);
   const [a4Scale, setA4Scale] = useState(1);
 
   useEffect(() => {
@@ -223,12 +272,11 @@ export default function QuotationPage() {
     () =>
       buildAhuSummaries({
         ahus,
-        adjustments,
         profileItems: masterData?.profileItems ?? [],
         konstruksiItems: masterData?.konstruksiItems ?? [],
         otherItems: masterData?.otherItems ?? [],
       }),
-    [adjustments, ahus, masterData?.konstruksiItems, masterData?.otherItems, masterData?.profileItems],
+    [ahus, masterData?.konstruksiItems, masterData?.otherItems, masterData?.profileItems],
   );
 
   const ppnRate = useMemo(() => {
@@ -430,7 +478,7 @@ export default function QuotationPage() {
       const fileUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = fileUrl;
-      anchor.download = `quotation-${Date.now()}.xlsx`;
+      anchor.download = buildQuotationFileName(quotationNo, effectivePreparedFor, "xlsx");
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -439,6 +487,211 @@ export default function QuotationPage() {
       setError(err instanceof Error ? err.message : "Gagal generate file Excel");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const downloadPdf = async () => {
+    setPdfBusy(true);
+    setError(null);
+
+    try {
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+      ]);
+
+      const doc = new jsPDF({ format: "a4", orientation: "portrait", unit: "mm" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const marginX = 14;
+      const bottomMargin = 14;
+      const usableWidth = pageWidth - marginX * 2;
+
+      doc.setTextColor(20, 20, 20);
+      doc.setDrawColor(17, 17, 17);
+
+      try {
+        const logoDataUrl = await loadImageAsDataUrl("/assets/template-logo.png");
+        doc.addImage(logoDataUrl, "PNG", marginX, 17, 46, 15);
+      } catch {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text("PT. Klimatek", marginX, 25);
+      }
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(14);
+      doc.text("QUOTATION", pageWidth - marginX, 23, { align: "right" });
+
+      doc.setFontSize(8.5);
+      const metaX = pageWidth - 53;
+      doc.text("Date", metaX, 32);
+      doc.text(":", metaX + 22, 32);
+      doc.text(quotationDate, metaX + 28, 32);
+      doc.text("Quotation No", metaX, 38);
+      doc.text(":", metaX + 22, 38);
+      doc.text(quotationNo, metaX + 28, 38);
+
+      doc.setLineWidth(0.2);
+      doc.line(marginX, 44, pageWidth - marginX, 44);
+
+      doc.setFontSize(9);
+      doc.text(["PT. Klimatek", "Jl. Tengsaw Kp. Babakan, Desa Tarikolot,", "RT. 003 RW. 005 Citeureup - Kab. Bogor", "Jawa Barat - Indonesia"], marginX, 52, {
+        lineHeightFactor: 1.45,
+      });
+
+      const drawInfoLine = (
+        label: string,
+        value: string,
+        y: number,
+        options?: { bold?: boolean; labelBlank?: boolean },
+      ): number => {
+        const labelWidth = 38;
+        const separatorWidth = 5;
+        const valueX = marginX + labelWidth + separatorWidth;
+        const maxValueWidth = usableWidth - labelWidth - separatorWidth;
+        const lines = doc.splitTextToSize(cleanPdfText(value) || "-", maxValueWidth) as string[];
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        if (!options?.labelBlank) {
+          doc.text(label, marginX, y);
+          doc.text(":", marginX + labelWidth, y);
+        }
+        doc.setFont("helvetica", options?.bold ? "bold" : "normal");
+        doc.text(lines, valueX, y, { lineHeightFactor: 1.35 });
+        return y + Math.max(lines.length, 1) * 4.3;
+      };
+
+      let cursorY = 80;
+      cursorY = drawInfoLine("Contact Person", preview.contactPerson || "-", cursorY);
+      cursorY = drawInfoLine("Prepared For", effectivePreparedFor || "-", cursorY + 1, { bold: true });
+      cursorY = drawInfoLine("", effectiveCustomerAddress || "-", cursorY, { labelBlank: true });
+      cursorY = drawInfoLine("Attn", quotationContent.attn || "-", cursorY + 3, { bold: true });
+
+      const tableBody: RowInput[] = preview.items.map((item, index) => [
+        String(index + 1),
+        cleanPdfText(item.description) || "-",
+        numberFormatter.format(item.quantity),
+        formatPdfCurrency(item.price),
+        formatPdfCurrency(item.total),
+      ]);
+
+      tableBody.push([
+        { content: "", colSpan: 2, styles: { lineWidth: 0 } },
+        { content: "Subtotal", colSpan: 2, styles: { fontStyle: "bold", halign: "right" } },
+        { content: formatPdfCurrency(preview.subtotal), styles: { halign: "right" } },
+      ]);
+      tableBody.push([
+        { content: "", colSpan: 2, styles: { lineWidth: 0 } },
+        {
+          content: `Discount (${(preview.discountRate * 100).toFixed(2)}%)`,
+          colSpan: 2,
+          styles: { fontStyle: "bold", halign: "right" },
+        },
+        { content: formatPdfCurrency(preview.discountAmount), styles: { halign: "right" } },
+      ]);
+      if (preview.hasAdditionalDiscount) {
+        tableBody.push([
+          { content: "", colSpan: 2, styles: { lineWidth: 0 } },
+          {
+            content: `Additional Discount (${(preview.additionalDiscountRate * 100).toFixed(2)}%)`,
+            colSpan: 2,
+            styles: { fontStyle: "bold", halign: "right" },
+          },
+          { content: formatPdfCurrency(preview.additionalDiscountAmount), styles: { halign: "right" } },
+        ]);
+      }
+      tableBody.push([
+        { content: "", colSpan: 2, styles: { lineWidth: 0 } },
+        { content: `PPN ${ppnPercent}%`, colSpan: 2, styles: { fontStyle: "bold", halign: "right" } },
+        { content: formatPdfCurrency(preview.ppn), styles: { halign: "right" } },
+      ]);
+      tableBody.push([
+        { content: "", colSpan: 2, styles: { lineWidth: 0 } },
+        { content: "Grand Total", colSpan: 2, styles: { fontStyle: "bold", halign: "right" } },
+        { content: formatPdfCurrency(preview.grandTotal), styles: { fontStyle: "bold", halign: "right" } },
+      ]);
+
+      autoTable(doc, {
+        startY: Math.max(103, cursorY + 6),
+        head: [["No", "Description", "QTY", "Price", "Total Price"]],
+        body: tableBody,
+        theme: "grid",
+        margin: { left: marginX, right: marginX, bottom: bottomMargin },
+        styles: {
+          cellPadding: { top: 1.5, right: 1.4, bottom: 1.5, left: 1.4 },
+          font: "helvetica",
+          fontSize: 8.3,
+          lineColor: [17, 17, 17],
+          lineWidth: 0.18,
+          minCellHeight: 7,
+          overflow: "linebreak",
+          textColor: [20, 20, 20],
+          valign: "top",
+        },
+        headStyles: {
+          fillColor: [255, 255, 255],
+          fontStyle: "bold",
+          halign: "center",
+          textColor: [20, 20, 20],
+        },
+        columnStyles: {
+          0: { cellWidth: 11, halign: "center" },
+          1: { cellWidth: 92, halign: "left" },
+          2: { cellWidth: 19, halign: "right" },
+          3: { cellWidth: 30, halign: "right" },
+          4: { cellWidth: 30, halign: "right" },
+        },
+      });
+
+      const lastTableY =
+        (doc as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? Math.max(103, cursorY + 6);
+      cursorY = lastTableY + 8;
+
+      const ensureSpace = (space: number) => {
+        if (cursorY + space <= pageHeight - bottomMargin) return;
+        doc.addPage();
+        cursorY = 18;
+      };
+
+      doc.setFontSize(8.6);
+      const additionalLines = String(quotationContent.additionalInformation || "-")
+        .replace(/\r\n/g, "\n")
+        .split("\n");
+
+      additionalLines.forEach((rawLine) => {
+        const isBold = /^\s*\*\*.*\*\*\s*$/.test(rawLine);
+        const line = cleanPdfText(rawLine);
+        if (!line) {
+          cursorY += 3.5;
+          return;
+        }
+
+        doc.setFont("helvetica", isBold ? "bold" : "normal");
+        const lines = doc.splitTextToSize(line, usableWidth) as string[];
+        ensureSpace(lines.length * 4.1);
+        doc.text(lines, marginX, cursorY, { lineHeightFactor: 1.35 });
+        cursorY += lines.length * 4.1;
+      });
+
+      ensureSpace(26);
+      cursorY += 8;
+      doc.setFont("helvetica", "normal");
+      doc.text("Best Regards", marginX, cursorY);
+      cursorY += 13;
+      doc.setFont("helvetica", "bold");
+      doc.text(effectiveSalesName || "-", marginX, cursorY);
+      cursorY += 5;
+      doc.text("PT Klimatek", marginX, cursorY);
+      cursorY += 5;
+      doc.text(`Email : ${effectiveSalesEmail || "-"}`, marginX, cursorY);
+
+      doc.save(buildQuotationFileName(quotationNo, effectivePreparedFor, "pdf"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal generate file PDF");
+    } finally {
+      setPdfBusy(false);
     }
   };
 
@@ -725,7 +978,18 @@ export default function QuotationPage() {
                   disabled={saveBusy}
                   title="Simpan / update quotation aktif ke database"
                 >
+                  <Save size={15} aria-hidden="true" />
                   {saveBusy ? "Menyimpan..." : "Simpan"}
+                </button>
+                <button
+                  type="button"
+                  className="rpb-btn-ghost action-btn"
+                  onClick={() => void downloadPdf()}
+                  disabled={pdfBusy}
+                  title="Download preview quotation sebagai PDF"
+                >
+                  <Download size={15} aria-hidden="true" />
+                  {pdfBusy ? "Generating..." : "Download PDF"}
                 </button>
                 <button
                   type="button"
@@ -733,6 +997,7 @@ export default function QuotationPage() {
                   onClick={() => void downloadExcel()}
                   disabled={busy}
                 >
+                  <FileSpreadsheet size={15} aria-hidden="true" />
                   {busy ? "Generating..." : "Download Excel"}
                 </button>
               </div>
@@ -744,7 +1009,12 @@ export default function QuotationPage() {
 
             <div className="a4-stage">
               <div className="a4-page-shell" ref={a4ShellRef} style={{ height: `${A4_HEIGHT_PX * a4Scale}px` }}>
-                <article className="a4-page" style={{ transform: `scale(${a4Scale})` }}>
+                <article
+                  ref={a4PageRef}
+                  className="a4-page"
+                  data-quotation-pdf-page
+                  style={{ transform: `scale(${a4Scale})` }}
+                >
                   <header className="sheet-head">
                     <Image
                       src="/assets/template-logo.png"
@@ -914,7 +1184,7 @@ export default function QuotationPage() {
         .item-box { border: 1px solid var(--rpb-border); border-radius: 10px; padding: 12px; margin: 0; display: grid; gap: 8px; }
         legend { padding: 0 8px; color: var(--rpb-ink-soft); font-weight: 600; font-size: 13px; }
         .actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
-        .action-btn { padding: 10px 14px; font-weight: 700; cursor: pointer; }
+        .action-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; font-weight: 700; cursor: pointer; }
         .footer-actions { margin-top: 12px; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
         .error-box { border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; border-radius: 10px; padding: 10px 12px; font-size: 13px; white-space: pre-wrap; }
         .info-box { border: 1px solid #bbf7d0; background: #f0fdf4; color: #166534; border-radius: 10px; padding: 10px 12px; font-size: 13px; white-space: pre-wrap; }

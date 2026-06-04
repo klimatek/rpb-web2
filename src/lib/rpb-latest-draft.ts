@@ -41,6 +41,12 @@ export const isMeaningfulDraftSnapshot = (snapshot: RpbDraftSnapshot): boolean =
     const hasDescription = ahu.quotationDescription.trim().length > 0 && ahu.quotationDescription !== ahu.name;
     const hasQuotationQtyChange = ahu.quotationQty !== DEFAULT_QUOTATION_QTY;
     const hasNameChange = ahu.name.trim().length > 0 && ahu.name !== "AHU 1";
+    const ahuAdjustments = ahu.adjustments ?? DEFAULT_ADJUSTMENTS;
+    const hasAdjustmentChange =
+      ahuAdjustments.stockReturn !== DEFAULT_ADJUSTMENTS.stockReturn ||
+      ahuAdjustments.marketingCost !== DEFAULT_ADJUSTMENTS.marketingCost ||
+      ahuAdjustments.services !== DEFAULT_ADJUSTMENTS.services ||
+      ahuAdjustments.profit !== DEFAULT_ADJUSTMENTS.profit;
 
     return (
       hasDimensionChanges ||
@@ -49,17 +55,19 @@ export const isMeaningfulDraftSnapshot = (snapshot: RpbDraftSnapshot): boolean =
       hasCustomSelections ||
       hasDescription ||
       hasQuotationQtyChange ||
-      hasNameChange
+      hasNameChange ||
+      hasAdjustmentChange
     );
   });
 
   const hasMultipleAhus = snapshot.ahus.length > 1;
 
+  const snapshotAdjustments = snapshot.adjustments ?? DEFAULT_ADJUSTMENTS;
   const hasAdjustmentChanges =
-    snapshot.adjustments.stockReturn !== DEFAULT_ADJUSTMENTS.stockReturn ||
-    snapshot.adjustments.marketingCost !== DEFAULT_ADJUSTMENTS.marketingCost ||
-    snapshot.adjustments.services !== DEFAULT_ADJUSTMENTS.services ||
-    snapshot.adjustments.profit !== DEFAULT_ADJUSTMENTS.profit;
+    snapshotAdjustments.stockReturn !== DEFAULT_ADJUSTMENTS.stockReturn ||
+    snapshotAdjustments.marketingCost !== DEFAULT_ADJUSTMENTS.marketingCost ||
+    snapshotAdjustments.services !== DEFAULT_ADJUSTMENTS.services ||
+    snapshotAdjustments.profit !== DEFAULT_ADJUSTMENTS.profit;
 
   return (
     hasText ||

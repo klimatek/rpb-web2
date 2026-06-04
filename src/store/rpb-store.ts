@@ -87,6 +87,13 @@ const safePercent = (value: number): number => {
   return Math.max(0, Math.min(100, value));
 };
 
+const sanitizeAdjustments = (value?: Partial<AdjustmentValues> | null): AdjustmentValues => ({
+  stockReturn: safePercent(value?.stockReturn ?? DEFAULT_ADJUSTMENTS.stockReturn),
+  marketingCost: safePercent(value?.marketingCost ?? DEFAULT_ADJUSTMENTS.marketingCost),
+  services: safePercent(value?.services ?? DEFAULT_ADJUSTMENTS.services),
+  profit: safePercent(value?.profit ?? DEFAULT_ADJUSTMENTS.profit),
+});
+
 const safeInteger = (value: number, fallback = 0): number => {
   if (!Number.isFinite(value)) {
     return fallback;
@@ -116,6 +123,7 @@ const createDefaultAhu = (index = 0): AhuDraft => {
     name,
     dimensions: { ...DEFAULT_DIMENSIONS },
     panelThickness: DEFAULT_PANEL_THICKNESS,
+    adjustments: { ...DEFAULT_ADJUSTMENTS },
     selectedOther: {},
     customOtherItems: [],
     quotationDescription: name,
@@ -123,7 +131,11 @@ const createDefaultAhu = (index = 0): AhuDraft => {
   };
 };
 
-const sanitizeAhu = (ahu: AhuDraft, index: number): AhuDraft => {
+const sanitizeAhu = (
+  ahu: AhuDraft,
+  index: number,
+  fallbackAdjustments: AdjustmentValues = DEFAULT_ADJUSTMENTS,
+): AhuDraft => {
   const fallbackName = `AHU ${index + 1}`;
   const name = sanitizeAhuName(ahu.name, fallbackName);
 
@@ -136,6 +148,7 @@ const sanitizeAhu = (ahu: AhuDraft, index: number): AhuDraft => {
       height: safeNumber(ahu.dimensions?.height ?? DEFAULT_DIMENSIONS.height),
     },
     panelThickness: ahu.panelThickness === 45 ? 45 : 30,
+    adjustments: sanitizeAdjustments(ahu.adjustments ?? fallbackAdjustments),
     selectedOther: cloneSelectedOther(ahu.selectedOther ?? {}),
     customOtherItems: cloneCustomOtherItems(ahu.customOtherItems ?? [])
       .map((item) => ({
@@ -168,6 +181,7 @@ const buildLegacyAhuFromSnapshot = (snapshot: Partial<RpbDraftSnapshot>): AhuDra
   },
   panelThickness:
     (snapshot as unknown as { panelThickness?: PanelThickness }).panelThickness === 45 ? 45 : 30,
+  adjustments: sanitizeAdjustments(snapshot.adjustments),
   selectedOther: cloneSelectedOther(
     (snapshot as unknown as { selectedOther?: Record<string, number> }).selectedOther ?? {},
   ),
@@ -187,8 +201,10 @@ const buildLegacyAhuFromSnapshot = (snapshot: Partial<RpbDraftSnapshot>): AhuDra
 });
 
 const normalizeSnapshotAhus = (snapshot: Partial<RpbDraftSnapshot>): AhuDraft[] => {
+  const fallbackAdjustments = sanitizeAdjustments(snapshot.adjustments);
+
   if (Array.isArray(snapshot.ahus) && snapshot.ahus.length > 0) {
-    return snapshot.ahus.map((ahu, index) => sanitizeAhu(ahu, index));
+    return snapshot.ahus.map((ahu, index) => sanitizeAhu(ahu, index, fallbackAdjustments));
   }
 
   return [buildLegacyAhuFromSnapshot(snapshot)];
@@ -213,7 +229,6 @@ interface RpbStore {
   customerAddress: string;
   ahus: AhuDraft[];
   activeAhuId: string;
-  adjustments: AdjustmentValues;
   quotationContent: QuotationContent;
   setCustomerName: (value: string) => void;
   setProjectName: (value: string) => void;
@@ -228,7 +243,7 @@ interface RpbStore {
   setAhuCustomOtherItemQty: (ahuId: string, itemId: string, qty: number) => void;
   removeCustomOtherItem: (itemId: string) => void;
   removeOther: (itemId: string) => void;
-  setAdjustment: (key: AdjustmentKey, value: number) => void;
+  setAhuAdjustment: (ahuId: string, key: AdjustmentKey, value: number) => void;
   setQuotationContentField: (key: QuotationContentKey, value: string) => void;
   setQuotationContent: (value: Partial<QuotationContent>) => void;
   resetOtherSelections: () => void;
@@ -252,7 +267,6 @@ export const useRpbStore = create<RpbStore>()((set, get) => ({
   customerAddress: "",
   ahus: [initialAhu],
   activeAhuId: initialAhu.id,
-  adjustments: { ...DEFAULT_ADJUSTMENTS },
   quotationContent: { ...DEFAULT_QUOTATION_CONTENT },
   setCustomerName: (value) => set({ customerName: value }),
   setProjectName: (value) => set({ projectName: value }),
@@ -356,12 +370,15 @@ export const useRpbStore = create<RpbStore>()((set, get) => ({
         };
       }),
     })),
-  setAdjustment: (key, value) =>
+  setAhuAdjustment: (ahuId, key, value) =>
     set((state) => ({
-      adjustments: {
-        ...state.adjustments,
-        [key]: safePercent(value),
-      },
+      ahus: updateAhuById(state.ahus, ahuId, (ahu) => ({
+        ...ahu,
+        adjustments: {
+          ...sanitizeAdjustments(ahu.adjustments),
+          [key]: safePercent(value),
+        },
+      })),
     })),
   setQuotationContentField: (key, value) =>
     set((state) => ({
@@ -389,6 +406,7 @@ export const useRpbStore = create<RpbStore>()((set, get) => ({
         name: nextName,
         dimensions: { ...sourceAhu.dimensions },
         panelThickness: sourceAhu.panelThickness,
+        adjustments: sanitizeAdjustments(sourceAhu.adjustments),
         selectedOther: cloneSelectedOther(sourceAhu.selectedOther),
         customOtherItems: cloneCustomOtherItems(sourceAhu.customOtherItems).map((item) => ({
           ...item,
@@ -456,15 +474,16 @@ export const useRpbStore = create<RpbStore>()((set, get) => ({
   },
   getSnapshot: () => {
     const state = get();
+    const ahus = state.ahus.map((ahu, index) => sanitizeAhu(ahu, index));
 
     return {
       customerName: state.customerName,
       projectName: state.projectName,
       customerAddress: state.customerAddress,
-      ahus: state.ahus.map((ahu, index) => sanitizeAhu(ahu, index)),
-      adjustments: { ...state.adjustments },
+      ahus,
+      adjustments: { ...(ahus[0]?.adjustments ?? DEFAULT_ADJUSTMENTS) },
       quotationContent: { ...state.quotationContent },
-      schemaVersion: 2,
+      schemaVersion: 3,
     };
   },
   loadSnapshot: (snapshot) => {
@@ -476,16 +495,6 @@ export const useRpbStore = create<RpbStore>()((set, get) => ({
       customerAddress: snapshot.customerAddress ?? "",
       ahus: nextAhus,
       activeAhuId: nextAhus[0]?.id ?? createDefaultAhu(0).id,
-      adjustments: {
-        stockReturn: safePercent(
-          snapshot.adjustments?.stockReturn ?? DEFAULT_ADJUSTMENTS.stockReturn,
-        ),
-        marketingCost: safePercent(
-          snapshot.adjustments?.marketingCost ?? DEFAULT_ADJUSTMENTS.marketingCost,
-        ),
-        services: safePercent(snapshot.adjustments?.services ?? DEFAULT_ADJUSTMENTS.services),
-        profit: safePercent(snapshot.adjustments?.profit ?? DEFAULT_ADJUSTMENTS.profit),
-      },
       quotationContent: sanitizeQuotationContent(snapshot.quotationContent),
     });
   },
@@ -498,7 +507,6 @@ export const useRpbStore = create<RpbStore>()((set, get) => ({
       customerAddress: "",
       ahus: [nextAhu],
       activeAhuId: nextAhu.id,
-      adjustments: { ...DEFAULT_ADJUSTMENTS },
       quotationContent: { ...DEFAULT_QUOTATION_CONTENT },
     });
   },
