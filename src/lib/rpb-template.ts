@@ -218,6 +218,7 @@ const normalizeQuotationContent = (value: unknown): QuotationContent | undefined
   }
 
   return {
+    quotationNo: typeof value.quotationNo === "string" ? value.quotationNo : "",
     attn: typeof value.attn === "string" ? value.attn : "",
     discount: typeof value.discount === "string" ? value.discount : "25%",
     additionalDiscount: typeof value.additionalDiscount === "string" ? value.additionalDiscount : "",
