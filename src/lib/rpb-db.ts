@@ -193,7 +193,7 @@ export const saveSummaryHistory = async (
       project_name: payload.projectName,
       snapshot_json: payload.snapshot,
     })
-    .select("id, user_id, title, customer_name, project_name, snapshot_json, created_at, updated_at")
+    .select("id, user_id, title, customer_name, project_name, snapshot_json, is_deleted, created_at, updated_at")
     .single();
 
   if (error) {
@@ -208,6 +208,7 @@ export const saveSummaryHistory = async (
     customerName: String(data.customer_name ?? ""),
     projectName: String(data.project_name ?? ""),
     snapshot: data.snapshot_json as RpbDraftSnapshot,
+    isDeleted: Boolean(data.is_deleted ?? false),
     createdAt: String(data.created_at ?? ""),
     updatedAt: String(data.updated_at ?? ""),
   };
@@ -232,7 +233,8 @@ export const updateSummaryHistory = async (
       snapshot_json: payload.snapshot,
     })
     .eq("id", id)
-    .select("id, user_id, title, customer_name, project_name, snapshot_json, created_at, updated_at")
+    .eq("is_deleted", false)
+    .select("id, user_id, title, customer_name, project_name, snapshot_json, is_deleted, created_at, updated_at")
     .maybeSingle();
 
   if (error) {
@@ -251,6 +253,7 @@ export const updateSummaryHistory = async (
     customerName: String(data.customer_name ?? ""),
     projectName: String(data.project_name ?? ""),
     snapshot: data.snapshot_json as RpbDraftSnapshot,
+    isDeleted: Boolean(data.is_deleted ?? false),
     createdAt: String(data.created_at ?? ""),
     updatedAt: String(data.updated_at ?? ""),
   };
@@ -262,8 +265,9 @@ export const fetchSummaryHistoryById = async (
 ): Promise<SavedSummaryRecord | null> => {
   const { data, error } = await supabase
     .from("rpb_saved_summaries")
-    .select("id, user_id, title, customer_name, project_name, snapshot_json, created_at, updated_at")
+    .select("id, user_id, title, customer_name, project_name, snapshot_json, is_deleted, created_at, updated_at")
     .eq("id", id)
+    .eq("is_deleted", false)
     .maybeSingle();
 
   if (error) {
@@ -282,6 +286,7 @@ export const fetchSummaryHistoryById = async (
     customerName: String(data.customer_name ?? ""),
     projectName: String(data.project_name ?? ""),
     snapshot: data.snapshot_json as RpbDraftSnapshot,
+    isDeleted: Boolean(data.is_deleted ?? false),
     createdAt: String(data.created_at ?? ""),
     updatedAt: String(data.updated_at ?? ""),
   };
@@ -296,7 +301,8 @@ export const fetchSummaryHistory = async (
   const limit = options?.limit;
   let query = supabase
     .from("rpb_saved_summaries")
-    .select("id, user_id, title, customer_name, project_name, snapshot_json, created_at, updated_at")
+    .select("id, user_id, title, customer_name, project_name, snapshot_json, is_deleted, created_at, updated_at")
+    .eq("is_deleted", false)
     .order("updated_at", { ascending: false });
 
   if (typeof limit === "number" && Number.isFinite(limit) && limit > 0) {
@@ -334,6 +340,7 @@ export const fetchSummaryHistory = async (
     customerName: String(row.customer_name ?? ""),
     projectName: String(row.project_name ?? ""),
     snapshot: row.snapshot_json as RpbDraftSnapshot,
+    isDeleted: Boolean(row.is_deleted ?? false),
     createdAt: String(row.created_at ?? ""),
     updatedAt: String(row.updated_at ?? ""),
   }));
@@ -343,7 +350,11 @@ export const deleteSummaryHistory = async (
   supabase: SupabaseClient,
   id: string,
 ): Promise<void> => {
-  const { error } = await supabase.from("rpb_saved_summaries").delete().eq("id", id);
+  const { error } = await supabase
+    .from("rpb_saved_summaries")
+    .update({ is_deleted: true })
+    .eq("id", id)
+    .eq("is_deleted", false);
   if (error) {
     throw error;
   }

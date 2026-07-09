@@ -61,7 +61,7 @@ const FixedBreakdownPanel = ({
   totalLabel: string;
   totalValue: number;
 }) => (
-  <div className="mt-3 overflow-hidden rounded-xl border border-rpb-border bg-white">
+  <div className="mt-3 overflow-hidden rounded-xl border border-rpb-border bg-white shadow-sm">
     {items.length === 0 ? (
       <p className="px-4 py-3 text-xs text-rpb-ink-soft">{emptyText}</p>
     ) : (
@@ -85,7 +85,7 @@ const FixedBreakdownPanel = ({
       </div>
     )}
 
-    <div className="flex items-center justify-between border-t border-rpb-border bg-[#eceef8] px-4 py-2 text-sm font-semibold">
+    <div className="flex items-center justify-between border-t border-rpb-border bg-rpb-primary-soft px-4 py-3 text-sm font-semibold text-rpb-primary-dark">
       <span>{totalLabel}</span>
       <span>{formatRupiah(totalValue)}</span>
     </div>
@@ -400,13 +400,10 @@ export default function HomePage() {
 
   return (
     <RpbPageFrame shellClassName="rpb-compact">
-      <div className="space-y-4 py-4 md:space-y-3 md:py-5">
+      <div className="space-y-6 py-6 md:space-y-8 md:py-8">
           {masterLoading ? (
-            <div className="rpb-section p-4">
+            <div className="rpb-key-card p-4">
               <div className="space-y-3">
-                <div className="rpb-skeleton rpb-skeleton-line" />
-                <div className="rpb-skeleton rpb-skeleton-line" />
-                <div className="rpb-skeleton rpb-skeleton-line" />
                 <div className="rpb-skeleton rpb-skeleton-line" />
                 <div className="rpb-skeleton rpb-skeleton-line" />
                 <div className="rpb-skeleton rpb-skeleton-line" />
@@ -427,15 +424,15 @@ export default function HomePage() {
             </div>
           ) : null}
           {onboardVisible ? (
-            <div className="rpb-onboarding-banner rounded-xl border border-rpb-border bg-white px-4 py-3 shadow-sm">
+            <div className="rpb-onboarding-banner rounded-2xl border border-rpb-primary-soft bg-white px-5 py-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
-                  <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rpb-primary text-sm text-white font-bold">?</span>
+                  <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rpb-primary text-sm text-white font-bold shadow-md shadow-rpb-primary/30">?</span>
                   <div>
-                    <p className="text-sm font-semibold text-foreground">Selamat datang di RPB Kalkulator!</p>
-                    <p className="mt-1 text-xs text-rpb-ink-soft">
+                    <p className="text-base font-semibold text-foreground">Selamat datang di RPB Kalkulator!</p>
+                    <p className="mt-1 text-sm text-rpb-ink-soft leading-relaxed">
                       Cukup <strong>3 langkah</strong>:
-                      (1) Isi data customer (boleh dikosongkan),
+                      (1) Isi data customer (opsional),
                       (2) Masukkan ukuran ruangan,
                       (3) Klik tombol <strong>&quot;Lanjut&quot;</strong> di bawah.
                     </p>
@@ -443,48 +440,49 @@ export default function HomePage() {
                 </div>
                 <button
                   type="button"
-                  className="shrink-0 text-rpb-ink-soft hover:text-foreground"
+                  className="shrink-0 text-rpb-ink-soft hover:text-foreground transition-colors"
                   onClick={hideOnboard}
                   aria-label="Tutup panduan"
                 >
-                  <X size={18} />
+                  <X size={20} />
                 </button>
               </div>
             </div>
           ) : null}
           {latestDraft && !draftBannerDismissed ? (
-            <section className="rpb-section border border-dashed border-rpb-border p-4">
+            <section className="rpb-key-card border border-dashed border-rpb-primary/30 p-5 bg-rpb-primary-soft/30">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-foreground">Draft terbaru tersedia</p>
-                  <p className="text-xs text-rpb-ink-soft">
+                  <p className="text-base font-semibold text-rpb-primary-dark">Draft terbaru tersedia</p>
+                  <p className="text-sm text-rpb-ink-soft mt-0.5">
                     Terakhir disimpan: {latestDraftLabel}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    className="rpb-btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+                    className="rpb-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold"
                     onClick={handleContinueLatestDraft}
                   >
-                    <RotateCcw size={14} />
+                    <RotateCcw size={16} />
                     Lanjutkan draft
                   </button>
                   <button
                     type="button"
-                    className="rpb-btn-ghost inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+                    className="rpb-btn-ghost inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold"
                     onClick={handleDiscardLatestDraft}
                   >
-                    <Trash2 size={14} />
+                    <Trash2 size={16} />
                     Hapus draft
                   </button>
                 </div>
               </div>
             </section>
           ) : null}
-          <div className="grid gap-3 md:grid-cols-2">
+
+          <div className="grid gap-4 md:grid-cols-2">
              <label className="flex flex-col gap-2 text-sm font-semibold text-rpb-ink-soft">
-              Nama Customer <span className="font-normal text-xs">(opsional)</span>
+              Nama Customer <span className="font-normal text-xs text-rpb-ink-soft/70">(opsional)</span>
               <input
                 className="rpb-input"
                 placeholder="Masukkan nama customer"
@@ -493,7 +491,7 @@ export default function HomePage() {
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-rpb-ink-soft">
-              Nama Proyek <span className="font-normal text-xs">(opsional)</span>
+              Nama Proyek <span className="font-normal text-xs text-rpb-ink-soft/70">(opsional)</span>
               <input
                 className="rpb-input"
                 placeholder="Masukkan nama proyek"
@@ -502,7 +500,7 @@ export default function HomePage() {
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-rpb-ink-soft md:col-span-2">
-              Alamat Customer <span className="font-normal text-xs">(opsional)</span>
+              Alamat Customer <span className="font-normal text-xs text-rpb-ink-soft/70">(opsional)</span>
               <input
                 className="rpb-input"
                 placeholder="Masukkan alamat customer"
@@ -512,44 +510,44 @@ export default function HomePage() {
             </label>
           </div>
 
-          <section className="rpb-section p-4 md:p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="rpb-h-title text-base font-semibold md:text-lg">Daftar AHU</h2>
+          <section className="rpb-key-card p-5 md:p-6">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="rpb-h-title text-lg font-semibold md:text-xl">Daftar AHU</h2>
               <button
                 type="button"
-                className="rpb-btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+                className="rpb-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold"
                 onClick={addAhu}
                 disabled={ahus.length >= MAX_AHU_PER_QUOTATION}
               >
-                <Plus size={15} />
+                <Plus size={16} />
                 Tambah AHU
               </button>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {ahus.map((ahu, index) => {
                 const isActive = ahu.id === activeAhuId;
 
                 return (
                   <div
                     key={ahu.id}
-                    className={`rounded-xl border p-2 ${
-                      isActive ? "border-rpb-primary bg-[#eef2ff]" : "border-rpb-border bg-white"
+                    className={`rounded-2xl border p-3 ${
+                      isActive ? "border-rpb-primary bg-rpb-primary-soft" : "border-rpb-border bg-white"
                     }`}
                   >
                     <button
                       type="button"
-                      className={`w-full rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rpb-primary/40 ${
+                      className={`w-full rounded-xl border px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rpb-primary/40 ${
                         isActive
                           ? "border-rpb-primary bg-white"
-                          : "border-rpb-border/70 bg-white hover:border-rpb-primary/60 hover:bg-[#f8f9ff]"
+                          : "border-rpb-border bg-white"
                       }`}
                       onClick={() => setActiveAhu(ahu.id)}
                     >
-                      <p className="text-xs text-rpb-ink-soft">AHU {index + 1}</p>
+                      <p className="text-xs font-bold text-rpb-ink-soft tracking-wider uppercase">AHU {index + 1}</p>
                       {renamingAhuId === ahu.id ? (
                         <input
-                          className="rpb-input mt-1 h-9"
+                          className="rpb-input mt-2 h-10"
                           value={renamingAhuValue}
                           onChange={(event) => setRenamingAhuValue(event.target.value)}
                           onBlur={commitRenameAhu}
@@ -565,27 +563,27 @@ export default function HomePage() {
                           autoFocus
                         />
                       ) : (
-                        <p className="mt-0.5 font-semibold text-foreground">{ahu.name}</p>
+                        <p className="mt-1 font-semibold text-foreground text-base truncate">{ahu.name}</p>
                       )}
                     </button>
 
-                    <div className="mt-2 flex items-center justify-end gap-1">
+                    <div className="mt-3 flex items-center justify-end gap-2">
                       <button
                         type="button"
-                        className="rpb-btn-ghost inline-flex h-9 w-9 items-center justify-center"
+                        className="rpb-btn-ghost inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white hover:bg-slate-100"
                         onClick={() => beginRenameAhu(ahu.id, ahu.name)}
                         aria-label={`Rename ${ahu.name}`}
                       >
-                        <Pencil size={14} />
+                        <Pencil size={15} />
                       </button>
                       <button
                         type="button"
-                        className="rpb-btn-ghost inline-flex h-9 w-9 items-center justify-center text-red-700"
+                        className="rpb-btn-ghost inline-flex h-10 w-10 items-center justify-center rounded-xl text-red-600 bg-white hover:bg-red-50 hover:text-red-700 hover:border-red-200"
                         onClick={() => handleRemoveAhu(ahu.id)}
                         disabled={ahus.length === 1}
                         aria-label={`Hapus ${ahu.name}`}
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={15} />
                       </button>
                     </div>
                   </div>
@@ -595,10 +593,10 @@ export default function HomePage() {
           </section>
 
           <div>
-            <h2 className="rpb-h-title mb-2 text-base font-semibold md:text-lg">
-              Ukuran Ruangan {activeAhu.name}
+            <h2 className="rpb-h-title mb-3 text-lg font-semibold md:text-xl">
+              Ukuran Ruangan <span className="text-rpb-primary">{activeAhu.name}</span>
             </h2>
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-3">
               <DimensionInput
                 label="Panjang (mm)"
                 value={dimensions.length}
@@ -617,12 +615,12 @@ export default function HomePage() {
             </div>
           </div>
 
-          <section className="rpb-key-card p-4 md:p-5">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <h2 className="rpb-h-title text-base font-semibold md:text-lg">Profile</h2>
+          <section className="rpb-key-card p-5 md:p-6">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="rpb-h-title text-lg font-semibold md:text-xl">Profile</h2>
               <button
                 type="button"
-                className="rpb-btn-ghost inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold"
+                className="rpb-btn-ghost inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-white"
                 onClick={() => setProfileBreakdownOpen((current) => !current)}
                 aria-expanded={profileBreakdownOpen}
                 aria-controls="profile-breakdown"
@@ -631,7 +629,7 @@ export default function HomePage() {
                 {profileBreakdownOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </button>
             </div>
-            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <label className="flex flex-col gap-2 text-sm font-semibold text-rpb-ink-soft md:w-64">
                 Tebal Panel
                 <select
@@ -641,33 +639,33 @@ export default function HomePage() {
                     setPanelThickness(Number(event.target.value) as 30 | 45)
                   }
                 >
-                  <option value={30}>30</option>
-                  <option value={45}>45</option>
+                  <option value={30}>30 mm</option>
+                  <option value={45}>45 mm</option>
                 </select>
               </label>
-              <div className="rpb-price-pill inline-flex w-full items-center justify-between gap-4 px-5 py-3 text-sm font-semibold md:w-auto md:min-w-72">
-                <span>Harga Profile</span>
-                <span className="text-base">{formatRupiah(profileIdr)}</span>
+              <div className="rpb-price-pill inline-flex w-full items-center justify-between gap-6 px-6 py-4 text-sm font-semibold md:w-auto md:min-w-80 shadow-inner">
+                <span className="opacity-80">Harga Profile</span>
+                <span className="text-xl tracking-tight">{formatRupiah(profileIdr)}</span>
               </div>
             </div>
             {profileBreakdownOpen ? (
-              <div id="profile-breakdown">
-                <FixedBreakdownPanel
-                  items={profileBreakdown}
-                  emptyText="Belum ada item Profile yang terhitung. Isi dimensi (Panjang/Lebar/Tinggi) di atas, maka rincian otomatis muncul."
-                  totalLabel="Total Profile"
-                  totalValue={profileIdr}
-                />
-              </div>
-            ) : null}
+                <div id="profile-breakdown" className="mt-2 overflow-hidden">
+                  <FixedBreakdownPanel
+                    items={profileBreakdown}
+                    emptyText="Belum ada item Profile yang terhitung. Isi dimensi (Panjang/Lebar/Tinggi) di atas, maka rincian otomatis muncul."
+                    totalLabel="Total Profile"
+                    totalValue={profileIdr}
+                  />
+                </div>
+              ) : null}
           </section>
 
-          <section className="rpb-key-card p-4 md:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="rpb-h-title text-base font-semibold md:text-lg">Konstruksi</h2>
+          <section className="rpb-key-card p-5 md:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="rpb-h-title text-lg font-semibold md:text-xl">Konstruksi</h2>
               <button
                 type="button"
-                className="rpb-btn-ghost inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold"
+                className="rpb-btn-ghost inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-white"
                 onClick={() => setKonstruksiBreakdownOpen((current) => !current)}
                 aria-expanded={konstruksiBreakdownOpen}
                 aria-controls="konstruksi-breakdown"
@@ -676,40 +674,40 @@ export default function HomePage() {
                 {konstruksiBreakdownOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </button>
             </div>
-            <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <div className="rpb-price-pill inline-flex w-full items-center justify-between gap-4 px-5 py-3 text-sm font-semibold md:ml-auto md:w-auto md:min-w-72">
-                <span>Total Konstruksi</span>
-                <span className="text-base">{formatRupiah(konstruksiIdr)}</span>
+            <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="rpb-price-pill inline-flex w-full items-center justify-between gap-6 px-6 py-4 text-sm font-semibold md:ml-auto md:w-auto md:min-w-80 shadow-inner">
+                <span className="opacity-80">Total Konstruksi</span>
+                <span className="text-xl tracking-tight">{formatRupiah(konstruksiIdr)}</span>
               </div>
             </div>
             {konstruksiBreakdownOpen ? (
-              <div id="konstruksi-breakdown">
-                <FixedBreakdownPanel
-                  items={konstruksiBreakdown}
-                  emptyText="Belum ada item Konstruksi yang terhitung. Isi dimensi dan pilih Tebal Panel untuk melihat rincian."
-                  totalLabel="Total Konstruksi"
-                  totalValue={konstruksiIdr}
-                />
-              </div>
-            ) : null}
+                <div id="konstruksi-breakdown" className="mt-2 overflow-hidden">
+                  <FixedBreakdownPanel
+                    items={konstruksiBreakdown}
+                    emptyText="Belum ada item Konstruksi yang terhitung. Isi dimensi dan pilih Tebal Panel untuk melihat rincian."
+                    totalLabel="Total Konstruksi"
+                    totalValue={konstruksiIdr}
+                  />
+                </div>
+              ) : null}
           </section>
 
-          <section className="rpb-section p-4 md:p-4">
-            <div className="mb-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <h2 className="rpb-h-title text-base font-semibold md:text-lg">Lainnya</h2>
-              <div className="rpb-price-pill inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold">
-                <span>Terpilih</span>
-                <span>{selectedOtherCount} unit</span>
+          <section className="rpb-key-card p-5 md:p-6">
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <h2 className="rpb-h-title text-lg font-semibold md:text-xl">Lainnya</h2>
+              <div className="rpb-price-pill inline-flex items-center gap-3 px-4 py-2 text-sm font-semibold shadow-sm">
+                <span className="opacity-80">Terpilih</span>
+                <span className="bg-white rounded-md px-2 py-0.5 text-rpb-primary shadow-sm">{selectedOtherCount} unit</span>
               </div>
             </div>
-            <div className="mb-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_220px]">
+            <div className="mb-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_240px]">
               <label className="relative">
                 <Search
-                  size={16}
-                  className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-rpb-ink-soft"
+                  size={18}
+                  className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-rpb-ink-soft/70"
                 />
                 <input
-                  className="rpb-input rpb-input-with-icon"
+                  className="rpb-input rpb-input-with-icon shadow-sm"
                   placeholder="Cari item atau model"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
@@ -717,7 +715,7 @@ export default function HomePage() {
               </label>
               <label>
                 <select
-                  className="rpb-input pl-3"
+                  className="rpb-input pl-4 shadow-sm"
                   value={activeFilter}
                   onChange={(event) => setActiveFilter(event.target.value as OtherFilter)}
                 >
@@ -730,50 +728,53 @@ export default function HomePage() {
               </label>
             </div>
 
-            <div className="max-h-[300px] overflow-y-auto pr-1 md:max-h-[360px]">
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="max-h-[360px] overflow-y-auto pr-2 md:max-h-[460px] custom-scrollbar">
+              <div className="grid gap-4 pb-2 sm:grid-cols-2 lg:grid-cols-3">
                 <button
                   type="button"
-                  className="rpb-grid-card rpb-custom-card flex min-h-[130px] flex-col items-center justify-center gap-2 p-3"
+                  className="rpb-grid-card rpb-custom-card flex min-h-[160px] flex-col items-center justify-center gap-3 p-4"
                   onClick={openCustomModal}
                   aria-label="Tambah custom item"
                 >
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-current text-2xl leading-none">
+                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-current text-3xl leading-none">
                     +
                   </span>
                   <div className="text-center">
-                    <p className="text-sm font-semibold">Tambah Custom Item</p>
-                    <p className="text-xs font-medium opacity-80">Klik untuk tambah</p>
+                    <p className="text-base font-bold">Tambah Custom Item</p>
+                    <p className="text-sm font-medium opacity-80 mt-1">Klik untuk tambah</p>
                   </div>
                 </button>
                 {filteredOtherItems.map((item) => {
                   const currentQty = selectedOther[item.id] ?? 0;
 
                   return (
-                    <article key={item.id} className="rpb-grid-card p-2.5">
-                      <div className="mb-1.5 flex items-start justify-between gap-2">
+                    <article
+                      key={item.id}
+                      className="rpb-grid-card p-5 flex flex-col justify-between min-h-[160px]"
+                    >
+                      <div className="mb-2 flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-sm font-semibold">{item.name}</p>
-                          <p className="text-xs text-rpb-ink-soft">{item.category}</p>
+                          <p className="text-base font-bold leading-tight">{item.name}</p>
+                          <p className="text-xs font-semibold text-rpb-ink-soft/80 mt-1 uppercase tracking-wider">{item.category}</p>
                         </div>
                         <button
                           type="button"
-                          className="rpb-btn-primary inline-flex h-8 w-8 items-center justify-center"
+                          className="rpb-btn-primary inline-flex h-10 w-10 shrink-0 items-center justify-center"
                           onClick={() => openAddModal(item)}
                           aria-label={`Tambah ${item.name}`}
                         >
-                          <Plus size={14} />
+                          <Plus size={18} strokeWidth={2.5} />
                         </button>
                       </div>
-                      <p className="line-clamp-1 text-xs text-rpb-ink-soft">
+                      <p className="line-clamp-2 text-sm text-rpb-ink-soft mt-1 leading-snug">
                         Model: {item.model}
                       </p>
-                      <div className="mt-2 flex items-center justify-between text-sm">
-                          <span className="font-semibold">
+                      <div className="mt-4 flex items-center justify-between text-base">
+                        <span className="font-bold tracking-tight text-foreground">
                           {formatRupiah(item.priceIdr)}
                         </span>
                         {currentQty > 0 ? (
-                          <span className="rpb-chip px-2 py-0.5 text-xs font-semibold text-rpb-primary">
+                          <span className="rpb-chip bg-white px-3 py-1 text-xs font-bold text-rpb-primary">
                             Qty {currentQty}
                           </span>
                         ) : null}
@@ -785,45 +786,45 @@ export default function HomePage() {
             </div>
           </section>
 
-          <div className="rpb-sticky-bottom flex justify-end">
+          <div className="rpb-sticky-bottom flex justify-end pb-4">
             <Link
               href="/summary"
-              className="rpb-btn-primary inline-flex items-center gap-2 px-5 py-3 text-sm font-semibold shadow-lg"
+              className="rpb-btn-primary inline-flex items-center gap-3 px-8 py-4 text-base font-bold"
             >
               Lanjut
-              <ArrowRight size={16} />
+              <ArrowRight size={20} />
             </Link>
           </div>
       </div>
 
       {modalItem ? (
-        <div className="rpb-modal-backdrop fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-[#15172b]/45 p-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] backdrop-blur-[2px] md:items-center md:pb-6">
-          <div className="rpb-modal-panel flex max-h-[calc(100dvh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-rpb-border bg-white shadow-xl">
-            <div className="rpb-topbar px-5 py-4 text-white">
-              <h3 className="rpb-h-title text-lg font-semibold">{modalItem.name}</h3>
+        <div className="rpb-modal-backdrop fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] md:items-center md:pb-6">
+          <div className="rpb-modal-panel flex max-h-[calc(100dvh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-rpb-border bg-white shadow-2xl">
+            <div className="rpb-topbar px-6 py-5 text-foreground">
+              <h3 className="rpb-h-title text-xl font-bold">{modalItem.name}</h3>
             </div>
-            <div className="space-y-5 overflow-y-auto p-5">
-              <div className="rpb-section p-4">
-                <p className="mb-1 text-sm text-rpb-ink-soft">Harga</p>
-                <p className="text-2xl font-semibold">
+            <div className="space-y-6 overflow-y-auto p-6">
+              <div className="rpb-key-card border border-rpb-border p-5">
+                <p className="mb-1 text-sm font-semibold text-rpb-ink-soft">Harga Satuan</p>
+                <p className="text-3xl font-bold tracking-tight text-foreground">
                   {formatRupiah(modalItem.priceIdr)}
                 </p>
               </div>
 
               <div>
-                <p className="mb-2 text-sm font-semibold text-rpb-ink-soft">
+                <p className="mb-3 text-sm font-bold text-rpb-ink-soft uppercase tracking-wider">
                   Jumlah (unit)
                 </p>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-4">
                   <button
                     type="button"
-                    className="rpb-btn-ghost h-11 w-11 text-xl"
+                    className="rpb-btn-ghost h-14 w-14 rounded-xl text-2xl border-2 hover:bg-slate-50"
                     onClick={() => setModalQty((qty) => Math.max(1, qty - 1))}
                   >
                     -
                   </button>
                   <input
-                    className="rpb-input text-center"
+                    className="rpb-input text-center h-14 text-xl font-bold shadow-inner bg-slate-50 border-2"
                     type="number"
                     min={1}
                     step={1}
@@ -835,7 +836,7 @@ export default function HomePage() {
                   />
                   <button
                     type="button"
-                    className="rpb-btn-primary h-11 w-11 text-xl font-semibold"
+                    className="rpb-btn-primary h-14 w-14 rounded-xl text-2xl font-bold shadow-lg shadow-rpb-primary/30"
                     onClick={() => setModalQty((qty) => qty + 1)}
                   >
                     +
@@ -843,24 +844,24 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <div className="rpb-section p-4">
-                <p className="text-sm text-rpb-ink-soft">Total Harga</p>
-                <p className="text-xl font-semibold">
+              <div className="rpb-key-card border border-rpb-primary/20 bg-rpb-primary-soft/30 p-5">
+                <p className="text-sm font-semibold text-rpb-primary-dark">Total Harga</p>
+                <p className="text-2xl font-bold text-rpb-primary mt-1">
                   {formatRupiah(modalQty * modalItem.priceIdr)}
                 </p>
               </div>
 
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
                 <button
                   type="button"
-                  className="rpb-btn-ghost px-4 py-2 text-sm font-semibold"
+                  className="rpb-btn-ghost px-6 py-3 text-sm font-bold"
                   onClick={closeAddModal}
                 >
                   Batal
                 </button>
                 <button
                   type="button"
-                  className="rpb-btn-primary px-4 py-2 text-sm font-semibold"
+                  className="rpb-btn-primary px-8 py-3 text-sm font-bold shadow-lg shadow-rpb-primary/25"
                   onClick={handleAddOther}
                 >
                   Tambah
@@ -872,56 +873,56 @@ export default function HomePage() {
       ) : null}
 
       {customModalOpen ? (
-        <div className="rpb-modal-backdrop fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-[#15172b]/45 p-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] backdrop-blur-[2px] md:items-center md:pb-6">
-          <div className="rpb-modal-panel flex max-h-[calc(100dvh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-rpb-border bg-[#eceef8] shadow-xl">
-            <div className="rpb-topbar px-6 py-4 text-white">
-              <h3 className="rpb-h-title text-lg font-semibold">Custom Item</h3>
+        <div className="rpb-modal-backdrop fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] md:items-center md:pb-6">
+          <div className="rpb-modal-panel flex max-h-[calc(100dvh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-rpb-border bg-slate-50 shadow-2xl">
+            <div className="rpb-topbar px-6 py-5 text-foreground">
+              <h3 className="rpb-h-title text-xl font-bold">Custom Item</h3>
             </div>
-            <div className="space-y-5 overflow-y-auto p-5 md:p-6">
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="flex flex-col gap-2 text-sm font-semibold text-rpb-ink-soft">
+            <div className="space-y-6 overflow-y-auto p-5 md:p-8">
+              <div className="grid gap-5 md:grid-cols-2">
+                <label className="flex flex-col gap-2 text-sm font-bold text-slate-700">
                   Jenis
                   <input
-                    className={`rpb-input ${customErrors.jenis ? "border-red-400" : ""}`}
+                    className={`rpb-input shadow-sm bg-white ${customErrors.jenis ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                     value={customJenis}
                     onChange={(event) => { setCustomJenis(event.target.value); setCustomErrors((e) => ({ ...e, jenis: undefined })); }}
                   />
-                  {customErrors.jenis ? <p className="text-xs text-red-600">{customErrors.jenis}</p> : null}
+                  {customErrors.jenis ? <p className="text-xs font-semibold text-red-500 mt-1">{customErrors.jenis}</p> : null}
                 </label>
-                <label className="flex flex-col gap-2 text-sm font-semibold text-rpb-ink-soft">
+                <label className="flex flex-col gap-2 text-sm font-bold text-slate-700">
                   Keterangan
                   <input
-                    className={`rpb-input ${customErrors.keterangan ? "border-red-400" : ""}`}
+                    className={`rpb-input shadow-sm bg-white ${customErrors.keterangan ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                     value={customKeterangan}
                     onChange={(event) => { setCustomKeterangan(event.target.value); setCustomErrors((e) => ({ ...e, keterangan: undefined })); }}
                   />
-                  {customErrors.keterangan ? <p className="text-xs text-red-600">{customErrors.keterangan}</p> : null}
+                  {customErrors.keterangan ? <p className="text-xs font-semibold text-red-500 mt-1">{customErrors.keterangan}</p> : null}
                 </label>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-4">
-                <label className="flex flex-col gap-2 text-sm font-semibold text-rpb-ink-soft">
+              <div className="grid gap-5 md:grid-cols-4">
+                <label className="flex flex-col gap-2 text-sm font-bold text-slate-700">
                   Satuan
                   <input
-                    className={`rpb-input ${customErrors.satuan ? "border-red-400" : ""}`}
+                    className={`rpb-input shadow-sm bg-white ${customErrors.satuan ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                     value={customSatuan}
                     onChange={(event) => { setCustomSatuan(event.target.value); setCustomErrors((e) => ({ ...e, satuan: undefined })); }}
                   />
-                  {customErrors.satuan ? <p className="text-xs text-red-600">{customErrors.satuan}</p> : null}
+                  {customErrors.satuan ? <p className="text-xs font-semibold text-red-500 mt-1">{customErrors.satuan}</p> : null}
                 </label>
-                <label className="flex flex-col gap-2 text-sm font-semibold text-rpb-ink-soft">
+                <label className="flex flex-col gap-2 text-sm font-bold text-slate-700">
                   Jenis Spec
                   <input
-                    className={`rpb-input ${customErrors.jenisSpec ? "border-red-400" : ""}`}
+                    className={`rpb-input shadow-sm bg-white ${customErrors.jenisSpec ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                     value={customJenisSpec}
                     onChange={(event) => { setCustomJenisSpec(event.target.value); setCustomErrors((e) => ({ ...e, jenisSpec: undefined })); }}
                   />
-                  {customErrors.jenisSpec ? <p className="text-xs text-red-600">{customErrors.jenisSpec}</p> : null}
+                  {customErrors.jenisSpec ? <p className="text-xs font-semibold text-red-500 mt-1">{customErrors.jenisSpec}</p> : null}
                 </label>
-                <label className="flex flex-col gap-2 text-sm font-semibold text-rpb-ink-soft">
+                <label className="flex flex-col gap-2 text-sm font-bold text-slate-700 md:col-span-2">
                   Harga (Rupiah)
                   <input
-                    className={`rpb-input ${customErrors.harga ? "border-red-400" : ""}`}
+                    className={`rpb-input shadow-sm bg-white font-semibold text-lg ${customErrors.harga ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                     type="number"
                     min={0}
                     step="any"
@@ -929,21 +930,24 @@ export default function HomePage() {
                     onFocus={selectInputOnFocus}
                     onChange={(event) => { setCustomHargaIdr(parseNumberInput(event.target.value)); setCustomErrors((e) => ({ ...e, harga: undefined })); }}
                   />
-                  {customErrors.harga ? <p className="text-xs text-red-600">{customErrors.harga}</p> : null}
+                  {customErrors.harga ? <p className="text-xs font-semibold text-red-500 mt-1">{customErrors.harga}</p> : null}
                 </label>
-                <label className="flex flex-col gap-2 text-sm font-semibold text-rpb-ink-soft">
-                  Jumlah
+              </div>
+
+              <div className="grid items-end gap-5 md:grid-cols-[minmax(0,1fr)_320px]">
+                <label className="flex flex-col gap-2 text-sm font-bold text-slate-700">
+                  Jumlah Custom Item
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
-                      className="rpb-btn-ghost h-11 w-11 shrink-0 aspect-square text-xl"
+                      className="rpb-btn-ghost h-12 w-12 shrink-0 aspect-square text-xl border-2 bg-white"
                       onClick={() => setCustomQty((qty) => Math.max(1, qty - 1))}
                       aria-label="Kurangi quantity custom item"
                     >
                       -
                     </button>
                     <input
-                      className={`rpb-input h-11 w-24 text-center ${customErrors.qty ? "border-red-400" : ""}`}
+                      className={`rpb-input h-12 w-24 text-center font-bold text-lg bg-white shadow-inner ${customErrors.qty ? "border-red-400" : ""}`}
                       type="text"
                       inputMode="numeric"
                       value={customQty}
@@ -952,40 +956,34 @@ export default function HomePage() {
                     />
                     <button
                       type="button"
-                      className="rpb-btn-primary h-11 w-11 shrink-0 aspect-square text-xl font-semibold"
+                      className="rpb-btn-primary h-12 w-12 shrink-0 aspect-square text-xl font-bold shadow-md"
                       onClick={() => setCustomQty((qty) => qty + 1)}
                       aria-label="Tambah quantity custom item"
                     >
                       +
                     </button>
                   </div>
-                  {customErrors.qty ? <p className="text-xs text-red-600">{customErrors.qty}</p> : null}
+                  {customErrors.qty ? <p className="text-xs font-semibold text-red-500 mt-1">{customErrors.qty}</p> : null}
                 </label>
-              </div>
-
-              <div className="grid items-end gap-3 md:grid-cols-[minmax(0,1fr)_290px]">
-                <div className="text-xs text-rpb-ink-soft">
-                  Quantity custom item bisa diatur sesuai kebutuhan.
-                </div>
-                <div className="border-t border-rpb-border px-4 py-2">
-                  <p className="text-xs text-rpb-ink-soft">Total Harga</p>
-                  <p className="text-lg font-semibold">
+                <div className="rpb-key-card border border-rpb-primary/20 bg-rpb-primary-soft/30 p-5 mt-4 md:mt-0">
+                  <p className="text-sm font-semibold text-rpb-primary-dark">Total Harga</p>
+                  <p className="text-2xl font-bold text-rpb-primary mt-1">
                     {formatRupiah(customHargaIdr * customQty)}
                   </p>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-1">
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
                 <button
                   type="button"
-                  className="rpb-btn-ghost px-4 py-2 text-sm font-semibold"
+                  className="rpb-btn-ghost px-6 py-3 text-sm font-bold bg-white"
                   onClick={closeCustomModal}
                 >
                   Batal
                 </button>
                 <button
                   type="button"
-                  className="rpb-btn-primary px-4 py-2 text-sm font-semibold"
+                  className="rpb-btn-primary px-8 py-3 text-sm font-bold shadow-lg shadow-rpb-primary/25"
                   onClick={handleAddCustomOther}
                 >
                   Tambah

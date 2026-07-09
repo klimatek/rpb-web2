@@ -110,6 +110,7 @@ export interface RpbMasterData {
 }
 
 export interface QuotationContent {
+  quotationNo: string;
   attn: string;
   discount: string;
   additionalDiscount: string;
@@ -140,6 +141,7 @@ export interface SavedSummaryRecord {
   customerName: string;
   projectName: string;
   snapshot: RpbDraftSnapshot;
+  isDeleted: boolean;
   createdAt: string;
   updatedAt: string;
 }

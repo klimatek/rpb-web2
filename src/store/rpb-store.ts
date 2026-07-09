@@ -14,6 +14,7 @@ import { create } from "zustand";
 export type QuotationContentKey = keyof QuotationContent;
 
 const DEFAULT_QUOTATION_CONTENT: QuotationContent = {
+  quotationNo: "",
   attn: "",
   discount: "25%",
   additionalDiscount: "",
@@ -29,6 +30,7 @@ const DEFAULT_QUOTATION_CONTENT: QuotationContent = {
 const sanitizeQuotationContent = (
   value?: Partial<QuotationContent> | null,
 ): QuotationContent => ({
+  quotationNo: typeof value?.quotationNo === "string" ? value.quotationNo : "",
   attn: typeof value?.attn === "string" ? value.attn : DEFAULT_QUOTATION_CONTENT.attn,
   discount: typeof value?.discount === "string" ? value.discount : DEFAULT_QUOTATION_CONTENT.discount,
   additionalDiscount:
@@ -398,23 +400,8 @@ export const useRpbStore = create<RpbStore>()((set, get) => ({
     })),
   addAhu: () =>
     set((state) => {
-      const sourceAhu = getAhuById(state.ahus, state.activeAhuId);
       const nextIndex = state.ahus.length;
-      const nextName = `AHU ${nextIndex + 1}`;
-      const nextAhu: AhuDraft = {
-        id: createAhuId(),
-        name: nextName,
-        dimensions: { ...sourceAhu.dimensions },
-        panelThickness: sourceAhu.panelThickness,
-        adjustments: sanitizeAdjustments(sourceAhu.adjustments),
-        selectedOther: cloneSelectedOther(sourceAhu.selectedOther),
-        customOtherItems: cloneCustomOtherItems(sourceAhu.customOtherItems).map((item) => ({
-          ...item,
-          id: `custom-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        })),
-        quotationDescription: nextName,
-        quotationQty: DEFAULT_QUOTATION_QTY,
-      };
+      const nextAhu = createDefaultAhu(nextIndex);
 
       return {
         ahus: [...state.ahus, nextAhu],

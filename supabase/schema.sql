@@ -141,15 +141,22 @@ create table if not exists public.rpb_saved_summaries (
   customer_name text not null default '',
   project_name text not null default '',
   snapshot_json jsonb not null,
+  is_deleted boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.rpb_saved_summaries
+add column if not exists is_deleted boolean not null default false;
 
 create index if not exists idx_rpb_saved_summaries_user_updated_at
 on public.rpb_saved_summaries (user_id, updated_at desc);
 
 create index if not exists idx_rpb_saved_summaries_updated_at
 on public.rpb_saved_summaries (updated_at desc);
+
+create index if not exists idx_rpb_saved_summaries_user_deleted_updated_at
+on public.rpb_saved_summaries (user_id, is_deleted, updated_at desc);
 
 drop trigger if exists trg_rpb_saved_summaries_updated_at on public.rpb_saved_summaries;
 create trigger trg_rpb_saved_summaries_updated_at
@@ -259,8 +266,8 @@ drop policy if exists "rpb_saved_summaries_update_own" on public.rpb_saved_summa
 create policy "rpb_saved_summaries_update_own"
 on public.rpb_saved_summaries for update
 to authenticated
-using (user_id = auth.uid())
-with check (user_id = auth.uid());
+using (user_id = auth.uid() or public.is_admin())
+with check (user_id = auth.uid() or public.is_admin());
 
 drop policy if exists "rpb_saved_summaries_delete_own" on public.rpb_saved_summaries;
 create policy "rpb_saved_summaries_delete_own"

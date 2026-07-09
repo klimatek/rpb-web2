@@ -29,7 +29,7 @@ export function RpbPageFrame({
     : "mx-auto w-full max-w-screen-2xl px-4 sm:px-6 md:px-10 lg:px-14 xl:px-20 2xl:px-24";
 
   return (
-    <div className={`min-h-screen w-full bg-rpb-primary ${containerClassName}`.trim()}>
+    <div className={`min-h-screen w-full bg-background ${containerClassName}`.trim()}>
       <RpbAppHeader className={headerClassName} />
       <main className={`relative min-h-screen ${contentOffsetClass}`}>
         <div className={`rpb-shell relative -mt-[2px] ${contentMinHeightClass} ${shellClassName}`.trim()}>

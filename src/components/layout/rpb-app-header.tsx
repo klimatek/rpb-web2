@@ -14,7 +14,7 @@ export function RpbAppHeader({ className = "" }: { className?: string }) {
           className="h-12 w-auto md:h-16"
         />
       </div>
-      <div className="pointer-events-none absolute right-0 bottom-0 left-0 h-5 rounded-t-[28px] bg-white md:h-6 md:rounded-t-[34px]" />
+      <div className="pointer-events-none absolute right-0 bottom-0 left-0 h-5 rounded-t-[28px] bg-background md:h-6 md:rounded-t-[34px]" />
     </header>
   );
 }

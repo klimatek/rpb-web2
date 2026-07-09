@@ -353,9 +353,14 @@ export default function QuotationPage() {
   );
 
   const quotationNo = useMemo(() => {
+    const customQuotationNo = quotationContent.quotationNo.trim();
+    if (customQuotationNo) {
+      return customQuotationNo;
+    }
+
     const date = new Date();
     return `Q-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}`;
-  }, []);
+  }, [quotationContent.quotationNo]);
 
   const applyBoldToControl = (
     control: HTMLInputElement | HTMLTextAreaElement | null,
@@ -734,6 +739,19 @@ export default function QuotationPage() {
                 <p className="muted" style={{ marginBottom: 4 }}>
                   Default diambil dari database. Bisa diubah; kosongkan untuk pakai default.
                 </p>
+
+                <label>
+                  <span>Quotation No</span>
+                  <input
+                    className="rpb-input"
+                    value={quotationContent.quotationNo}
+                    placeholder={quotationNo}
+                    onChange={(event) => setQuotationContentField("quotationNo", event.target.value)}
+                  />
+                  <span className="text-xs text-rpb-ink-soft">
+                    Kosongkan untuk pakai format otomatis `Q-YYYYMM`.
+                  </span>
+                </label>
 
                 <label>
                   <div className="field-label-row">

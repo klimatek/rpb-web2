@@ -1,16 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f9ff;
-  --foreground: #1f2340;
-  --rpb-primary: #373d77;
-  --rpb-primary-dark: #2f3569;
-  --rpb-primary-soft: #eceef8;
-  --rpb-border: #dfe3f3;
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --rpb-primary: #475569;
+  --rpb-primary-dark: #334155;
+  --rpb-primary-soft: #f1f5f9;
+  --rpb-border: #e2e8f0;
   --rpb-surface: #ffffff;
-  --rpb-ink-soft: #4e5275;
-  --rpb-focus-ring: rgba(55, 61, 119, 0.2);
-  --rpb-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --rpb-surface-solid: #ffffff;
+  --rpb-ink-soft: #64748b;
+  --rpb-focus-ring: rgba(71, 85, 105, 0.18);
+  --rpb-ease-out: ease;
+  --rpb-ease-spring: ease;
 }
 
 @theme inline {
@@ -21,6 +23,7 @@
   --color-rpb-primary-soft: var(--rpb-primary-soft);
   --color-rpb-border: var(--rpb-border);
   --color-rpb-surface: var(--rpb-surface);
+  --color-rpb-surface-solid: var(--rpb-surface-solid);
   --color-rpb-ink-soft: var(--rpb-ink-soft);
   --font-sans: var(--font-manrope);
   --font-display: var(--font-sora);
@@ -58,18 +61,19 @@ body::-webkit-scrollbar {
 
 .rpb-shell {
   border: 0;
-  background: var(--rpb-surface);
+  background: var(--background);
   box-shadow: none;
 }
 
 .rpb-topbar {
-  border-bottom: 1px solid rgba(223, 227, 243, 0.9);
-  background: var(--rpb-primary);
+  border-bottom: 1px solid var(--rpb-border);
+  background: var(--background);
 }
 
 .rpb-fixed-header {
-  border-bottom: 0;
-  background: var(--rpb-primary);
+  border-bottom: 1px solid var(--rpb-border);
+  background: #373d77;
+  color: #ffffff;
 }
 
 .rpb-h-title {
@@ -80,14 +84,13 @@ body::-webkit-scrollbar {
 .rpb-input {
   width: 100%;
   border: 1px solid var(--rpb-border);
-  border-radius: 10px;
-  background: var(--rpb-surface);
-  min-height: 44px;
-  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--rpb-surface-solid);
+  min-height: 48px;
+  padding: 12px 16px;
   color: var(--foreground);
   outline: none;
-  transition: border-color 180ms var(--rpb-ease-out), box-shadow 180ms var(--rpb-ease-out),
-    background-color 180ms var(--rpb-ease-out);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .rpb-input:focus {
@@ -97,61 +100,54 @@ body::-webkit-scrollbar {
 
 .rpb-input:disabled {
   cursor: not-allowed;
-  background: color-mix(in oklab, var(--rpb-surface) 78%, var(--rpb-primary-soft));
-  color: color-mix(in oklab, var(--foreground) 72%, white);
+  background: var(--rpb-primary-soft);
+  opacity: 0.6;
 }
 
 .rpb-input-with-icon {
-  padding-left: 44px !important;
+  padding-left: 48px !important;
 }
 
 .rpb-chip {
   border: 1px solid var(--rpb-border);
   border-radius: 999px;
-  background: #fff;
+  background: var(--rpb-surface-solid);
 }
 
 .rpb-btn-primary {
-  border-radius: 10px;
-  background: var(--rpb-primary);
+  border-radius: 12px;
+  background: #373d77;
   color: #fff;
-  min-height: 44px;
-  transition: background-color 180ms var(--rpb-ease-out), transform 180ms var(--rpb-ease-out),
-    box-shadow 180ms var(--rpb-ease-out);
+  min-height: 48px;
+  transition: background-color 120ms ease;
 }
 
 .rpb-btn-primary:hover {
-  background: var(--rpb-primary-dark);
-  transform: translateY(-1px);
-  box-shadow: 0 10px 20px rgba(55, 61, 119, 0.2);
+  background: #2d3363;
 }
 
 .rpb-btn-primary:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 4px var(--rpb-focus-ring);
+  box-shadow: 0 0 0 4px rgba(55, 61, 119, 0.18);
 }
 
 .rpb-btn-primary:disabled {
   cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-  opacity: 0.72;
+  opacity: 0.6;
 }
 
 .rpb-btn-ghost {
   border: 1px solid var(--rpb-border);
-  border-radius: 10px;
-  background: var(--rpb-surface);
-  min-height: 44px;
+  border-radius: 12px;
+  background: var(--rpb-surface-solid);
+  min-height: 48px;
   color: var(--foreground);
-  transition: border-color 180ms var(--rpb-ease-out), color 180ms var(--rpb-ease-out),
-    background-color 180ms var(--rpb-ease-out), transform 180ms var(--rpb-ease-out);
+  transition: background-color 120ms ease, border-color 120ms ease;
 }
 
 .rpb-btn-ghost:hover {
-  border-color: color-mix(in oklab, var(--rpb-border) 72%, var(--rpb-primary));
-  color: var(--rpb-primary);
-  background: color-mix(in oklab, var(--rpb-surface) 85%, var(--rpb-primary-soft));
+  background: var(--rpb-primary-soft);
+  border-color: var(--rpb-border);
 }
 
 .rpb-btn-ghost:focus-visible {
@@ -161,7 +157,7 @@ body::-webkit-scrollbar {
 
 .rpb-btn-ghost:disabled {
   cursor: not-allowed;
-  opacity: 0.72;
+  opacity: 0.5;
 }
 
 .rpb-alert {
@@ -198,7 +194,7 @@ body::-webkit-scrollbar {
 }
 
 .rpb-price-pill {
-  border: 1px solid rgba(55, 61, 119, 0.24);
+  border: 1px solid var(--rpb-border);
   border-radius: 999px;
   background: var(--rpb-primary-soft);
   color: var(--rpb-primary-dark);
@@ -206,36 +202,25 @@ body::-webkit-scrollbar {
 
 .rpb-grid-card {
   border: 1px solid var(--rpb-border);
-  border-radius: 10px;
+  border-radius: 16px;
   background: var(--rpb-surface);
-  transition: border-color 180ms var(--rpb-ease-out), transform 180ms var(--rpb-ease-out),
-    box-shadow 180ms var(--rpb-ease-out);
-}
-
-.rpb-grid-card:hover {
-  border-color: color-mix(in oklab, var(--rpb-border) 68%, var(--rpb-primary));
-  transform: translateY(-1px);
-  box-shadow: 0 8px 16px rgba(30, 36, 88, 0.08);
 }
 
 .rpb-key-card {
   border: 1px solid var(--rpb-border);
-  border-radius: 14px;
-  background: #fff;
-  box-shadow: 0 10px 24px rgba(55, 61, 119, 0.1);
+  border-radius: 20px;
+  background: var(--rpb-surface);
 }
 
 .rpb-custom-card {
-  border: 1.5px dashed rgba(55, 61, 119, 0.55) !important;
-  background: #eceef8 !important;
-  color: #373d77 !important;
-  transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
+  border: 1.5px dashed rgba(71, 85, 105, 0.3) !important;
+  background: var(--rpb-primary-soft) !important;
+  color: var(--rpb-primary) !important;
 }
 
 .rpb-custom-card:hover {
-  border-color: #373d77 !important;
-  background: #eceef8 !important;
-  transform: translateY(-1px);
+  border-color: var(--rpb-primary) !important;
+  background: var(--rpb-primary-soft) !important;
 }
 
 .rpb-table th,
@@ -246,7 +231,7 @@ body::-webkit-scrollbar {
 }
 
 .rpb-table thead th {
-  background: #373d77;
+  background: var(--rpb-primary);
   color: #fff;
   font-size: 12px;
   font-weight: 700;
@@ -307,7 +292,7 @@ body::-webkit-scrollbar {
 }
 
 .rpb-editor-content .tiptap th {
-  background: #373d77;
+  background: var(--rpb-primary);
   color: #fff;
   font-weight: 700;
   font-size: 11px;
@@ -319,77 +304,16 @@ body::-webkit-scrollbar {
   border-radius: 8px;
 }
 
-@keyframes rpb-delayed-loader-show {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes rpb-loader-sweep {
-  from {
-    transform: translateX(-120%);
-  }
-  to {
-    transform: translateX(120%);
-  }
-}
-
-@keyframes rpb-modal-backdrop-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes rpb-modal-panel-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
 .rpb-delayed-loader {
-  opacity: 0;
-  position: relative;
-  overflow: hidden;
-  border-radius: 10px;
-  animation: rpb-delayed-loader-show 280ms var(--rpb-ease-out) 140ms forwards;
-}
-
-.rpb-delayed-loader::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    105deg,
-    transparent 30%,
-    rgba(255, 255, 255, 0.42) 50%,
-    transparent 70%
-  );
-  transform: translateX(-120%);
-  animation: rpb-loader-sweep 1.45s var(--rpb-ease-out) 240ms infinite;
-  pointer-events: none;
+  opacity: 1;
 }
 
 .rpb-modal-backdrop {
-  animation: rpb-modal-backdrop-in 180ms var(--rpb-ease-out) both;
+  animation: none;
 }
 
 .rpb-modal-panel {
-  transform-origin: top center;
-  will-change: transform, opacity;
-  animation: rpb-modal-panel-in 260ms var(--rpb-ease-out) both;
+  animation: none;
 }
 
 @media (min-width: 1024px) {
@@ -797,8 +721,6 @@ body::-webkit-scrollbar {
 /* Accordion grid trick — smooth height animation tanpa max-h hack */
 .rpb-accordion-panel {
   display: grid;
-  transition: grid-template-rows 300ms cubic-bezier(0.22, 1, 0.36, 1),
-              opacity 300ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .rpb-accordion-panel[data-expanded="true"] {
   grid-template-rows: 1fr;
@@ -836,21 +758,9 @@ button:focus-visible:not(.rpb-btn-primary):not(.rpb-btn-ghost) {
 }
 
 /* ========== Skeleton loader ========== */
-@keyframes rpb-skeleton-shimmer {
-  0% { background-position: -400px 0; }
-  100% { background-position: 400px 0; }
-}
-
 .rpb-skeleton {
   border-radius: 10px;
-  background: linear-gradient(
-    90deg,
-    color-mix(in oklab, var(--rpb-primary-soft) 50%, transparent) 0%,
-    color-mix(in oklab, var(--rpb-primary-soft) 90%, white) 40%,
-    color-mix(in oklab, var(--rpb-primary-soft) 50%, transparent) 80%
-  );
-  background-size: 400px 100%;
-  animation: rpb-skeleton-shimmer 1.6s var(--rpb-ease-out) infinite;
+  background: var(--rpb-primary-soft);
 }
 
 .rpb-skeleton-line {
@@ -874,11 +784,6 @@ button:focus-visible:not(.rpb-btn-primary):not(.rpb-btn-ghost) {
 }
 
 /* ========== Onboarding banner ========== */
-@keyframes rpb-onboard-in {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 .rpb-onboarding-banner {
-  animation: rpb-onboard-in 320ms var(--rpb-ease-out) both;
+  animation: none;
 }
