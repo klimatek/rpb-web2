@@ -12,6 +12,7 @@ import { saveSummaryHistory, updateSummaryHistory } from "@/lib/rpb-db";
 import {
   getActiveDraftId,
   setActiveDraftId,
+  clearActiveDraftId,
 } from "@/lib/rpb-latest-draft";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useRpbStore } from "@/store/rpb-store";
@@ -191,7 +192,7 @@ export default function SummaryPage() {
     return [];
   };
 
-  const submitSaveState = async (rawTitle: string) => {
+  const submitSaveState = async (rawTitle: string, mode: "new" | "update" = "update") => {
     setSaveBusy(true);
     setSaveMessage(null);
 
@@ -199,7 +200,12 @@ export default function SummaryPage() {
       const supabase = getSupabaseBrowserClient();
       const title = rawTitle.trim() || projectName || "RPB Summary";
       const snapshot = getSnapshot();
-      const activeId = getActiveDraftId();
+      let activeId = getActiveDraftId();
+
+      if (mode === "new") {
+        clearActiveDraftId();
+        activeId = null;
+      }
 
       if (activeId) {
         const updated = await updateSummaryHistory(supabase, activeId, {
@@ -254,9 +260,9 @@ export default function SummaryPage() {
     setSaveModalOpen(false);
   };
 
-  const handleSaveModalSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSaveModalSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    await submitSaveState(saveTitleInput);
+    void submitSaveState(saveTitleInput, "update");
   };
 
   const toggleAhuOpen = (ahuId: string) => {
@@ -838,7 +844,7 @@ export default function SummaryPage() {
               <h3 className="rpb-h-title text-lg font-semibold">Simpan Quotation</h3>
             </div>
             <form className="space-y-4 overflow-y-auto p-5" onSubmit={handleSaveModalSubmit}>
-              <p className="text-xs text-rpb-ink-soft">Update quotation aktif. Jika belum ada, akan dibuat entry baru.</p>
+              <p className="text-xs text-rpb-ink-soft">Simpan quotation Anda ke dalam riwayat.</p>
               <label className="flex flex-col gap-2 text-sm font-semibold text-rpb-ink-soft">
                 Nama history (opsional)
                 <input
@@ -850,7 +856,7 @@ export default function SummaryPage() {
                 />
               </label>
 
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end gap-2 flex-wrap">
                 <button
                   type="button"
                   className="rpb-btn-ghost px-4 py-2 text-sm font-semibold"
@@ -859,13 +865,35 @@ export default function SummaryPage() {
                 >
                   Batal
                 </button>
-                <button
-                  type="submit"
-                  className="rpb-btn-primary px-4 py-2 text-sm font-semibold"
-                  disabled={saveBusy}
-                >
-                  {saveBusy ? "Menyimpan..." : "Simpan"}
-                </button>
+                {getActiveDraftId() ? (
+                  <>
+                    <button
+                      type="button"
+                      className="rpb-btn-secondary bg-[#e5e7eb] hover:bg-[#d1d5db] text-[#374151] px-4 py-2 text-sm font-semibold rounded-md transition-colors"
+                      onClick={() => void submitSaveState(saveTitleInput, "new")}
+                      disabled={saveBusy}
+                    >
+                      {saveBusy ? "Menyimpan..." : "Simpan sbg Baru"}
+                    </button>
+                    <button
+                      type="button"
+                      className="rpb-btn-primary px-4 py-2 text-sm font-semibold"
+                      onClick={() => void submitSaveState(saveTitleInput, "update")}
+                      disabled={saveBusy}
+                    >
+                      {saveBusy ? "Menyimpan..." : "Update Aktif"}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="rpb-btn-primary px-4 py-2 text-sm font-semibold"
+                    onClick={() => void submitSaveState(saveTitleInput, "new")}
+                    disabled={saveBusy}
+                  >
+                    {saveBusy ? "Menyimpan..." : "Simpan"}
+                  </button>
+                )}
               </div>
             </form>
           </div>
